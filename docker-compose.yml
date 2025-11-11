@@ -1,0 +1,74 @@
+services:
+  smart_appointment_web:
+    container_name: smart_appointment_web
+    entrypoint: ./scripts/web.sh
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '8080:8080'
+    restart: always
+    volumes:
+      - .:/app
+    networks:
+      - default
+      - appointment_network
+    profiles: ["basic-setup", "web"]
+
+  smart_appointment_web_worker:
+    container_name: smart_appointment_web_worker
+    build:
+      context: .
+    entrypoint: ./scripts/worker.sh
+    volumes:
+      - .:/app
+    networks:
+      - default
+      - appointment_network
+    profiles: [ "basic-setup", "worker"]
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    networks:
+      - default
+      - appointment_network
+    profiles: [ "basic-setup", "redis" ]
+
+  postgresdb:
+    image: postgres
+    container_name: postgresdb
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_NAME: appointment_management
+      POSTGRES_PORT: 5432
+    volumes:
+      - app-db-data:/var/lib/postgresql
+    networks:
+      - default
+      - appointment_network
+    profiles: [ "basic-setup", "postgresdb" ]
+
+  nginx:
+    image: nginx
+    container_name: nginx
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - default
+      - appointment_network
+    profiles: [ "basic-setup", "nginx" ]
+
+networks:
+  appointment_network:
+    external: true
+    driver: bridge
+
+volumes:
+  app-db-data:
