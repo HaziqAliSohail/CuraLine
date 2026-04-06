@@ -6,8 +6,8 @@ from settings import settings
 
 engine = create_engine(
     url=settings.db_uri,
-    pool_size=4500,
-    echo=True
+    pool_size=20,
+    echo=False
 )
 
 connection = sessionmaker(
@@ -19,11 +19,13 @@ Base = declarative_base()
 
 
 def get_db_session():
+    session = connection()
     try:
-        with connection.begin():
-            yield Session
-
+        yield session
+        session.commit()
     except SQLAlchemyError:
-        Session.rollback()
-
+        session.rollback()
+        raise
+    finally:
+        session.close()
 

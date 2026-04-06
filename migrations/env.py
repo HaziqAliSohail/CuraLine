@@ -5,7 +5,13 @@ from sqlalchemy import pool
 
 from alembic import context
 
-import settings
+from settings import settings
+from database.db import Base
+import models.patient  # noqa: F401
+import models.doctor  # noqa: F401
+import models.appointment  # noqa: F401
+import models.doctor_slot  # noqa: F401
+import models.reschedule_request  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,9 +24,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
 
 config.set_main_option('sqlalchemy.url', settings.db_uri)
 # other values from the config, defined by the needs of env.py,

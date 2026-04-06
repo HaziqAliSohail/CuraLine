@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DATETIME, Enum, String
+from sqlalchemy import Column, DateTime, Enum, String
 
 
 class PersonalDataMixin:
@@ -18,5 +18,5 @@ class PersonalDataMixin:
 
 
 class TimestampMixin:
-    created_at = Column(DATETIME, default=datetime.now())
-    updated_at = Column(DATETIME, default=datetime.now(), onupdate=datetime.now())
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

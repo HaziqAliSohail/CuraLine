@@ -42,8 +42,7 @@ services:
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin
-      POSTGRES_NAME: appointment_management
-      POSTGRES_PORT: 5432
+      POSTGRES_DB: appointment_management
     volumes:
       - app-db-data:/var/lib/postgresql
     networks:
@@ -67,7 +66,6 @@ services:
 
 networks:
   appointment_network:
-    external: true
     driver: bridge
 
 volumes:
