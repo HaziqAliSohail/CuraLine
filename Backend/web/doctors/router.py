@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 
 from database.db import get_db_session
 from models.doctor import Doctor
+from models.patient import Patient
+from web.auth.security import get_current_patient
 from web.doctors.schemas import DoctorInSchema, DoctorOutSchema
 
 doctors_router = APIRouter()
@@ -23,7 +25,11 @@ def list_doctors(
 
 
 @doctors_router.post("/", response_model=DoctorOutSchema, status_code=status.HTTP_201_CREATED)
-def create_doctor(body: DoctorInSchema, db: Session = Depends(get_db_session)):
+def create_doctor(
+    body: DoctorInSchema,
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db_session),
+):
     doctor = Doctor(**body.model_dump())
     db.add(doctor)
     db.flush()
@@ -40,7 +46,12 @@ def get_doctor(doctor_id: int, db: Session = Depends(get_db_session)):
 
 
 @doctors_router.put("/{doctor_id}", response_model=DoctorOutSchema)
-def update_doctor(doctor_id: int, body: DoctorInSchema, db: Session = Depends(get_db_session)):
+def update_doctor(
+    doctor_id: int,
+    body: DoctorInSchema,
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db_session),
+):
     doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found.")
@@ -52,7 +63,11 @@ def update_doctor(doctor_id: int, body: DoctorInSchema, db: Session = Depends(ge
 
 
 @doctors_router.delete("/{doctor_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_doctor(doctor_id: int, db: Session = Depends(get_db_session)):
+def delete_doctor(
+    doctor_id: int,
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db_session),
+):
     doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found.")

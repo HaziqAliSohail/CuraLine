@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from database.db import get_db_session
 from models.doctor import Doctor
 from models.doctor_slot import DoctorSlot
+from models.patient import Patient
+from web.auth.security import get_current_patient
 from web.slots.schemas import SlotInSchema, SlotOutSchema
 
 slots_router = APIRouter()
@@ -29,7 +31,11 @@ def list_slots(
 
 
 @slots_router.post("/", response_model=SlotOutSchema, status_code=status.HTTP_201_CREATED)
-def create_slot(body: SlotInSchema, db: Session = Depends(get_db_session)):
+def create_slot(
+    body: SlotInSchema,
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db_session),
+):
     doctor = db.query(Doctor).filter(Doctor.id == body.doctor_id).first()
     if not doctor:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found.")
@@ -42,7 +48,11 @@ def create_slot(body: SlotInSchema, db: Session = Depends(get_db_session)):
 
 
 @slots_router.put("/{slot_id}/close", response_model=SlotOutSchema)
-def close_slot(slot_id: int, db: Session = Depends(get_db_session)):
+def close_slot(
+    slot_id: int,
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db_session),
+):
     slot = db.query(DoctorSlot).filter(DoctorSlot.id == slot_id).first()
     if not slot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slot not found.")
@@ -53,7 +63,11 @@ def close_slot(slot_id: int, db: Session = Depends(get_db_session)):
 
 
 @slots_router.delete("/{slot_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_slot(slot_id: int, db: Session = Depends(get_db_session)):
+def delete_slot(
+    slot_id: int,
+    current_patient: Patient = Depends(get_current_patient),
+    db: Session = Depends(get_db_session),
+):
     slot = db.query(DoctorSlot).filter(DoctorSlot.id == slot_id).first()
     if not slot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Slot not found.")
