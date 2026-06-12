@@ -13,8 +13,15 @@ def inference(
     message_body: InferenceInSchema,
     current_patient: Patient = Depends(get_current_patient),
 ):
+    # Reject blank or whitespace-only messages to avoid wasting LLM tokens
+    if not message_body.message or not message_body.message.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Message cannot be empty.",
+        )
+
     history = message_body.conversation_history + [
-        {"role": "user", "content": message_body.message}
+        {"role": "user", "content": message_body.message.strip()}
     ]
 
     result = chat_execution_task(
@@ -36,4 +43,6 @@ def inference(
         "severity_score": result.get("severity_score"),
         "stage": result.get("stage"),
         "collected_fields": result.get("collected", message_body.collected_fields),
+        "urgent_guidance": result.get("urgent_guidance"),
+        "guidance_type": result.get("guidance_type"),
     }

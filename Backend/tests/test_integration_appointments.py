@@ -52,14 +52,23 @@ class TestAppointmentsEndpoints:
         )
         assert resp.status_code == 404  # Not found for this patient
 
-    def test_update_appointment_status(self, client, auth_header, sample_appointment):
+    def test_update_appointment_status_cancel(self, client, auth_header, sample_appointment):
+        resp = client.put(
+            f"/v1/appointments/{sample_appointment.id}/status",
+            headers=auth_header,
+            json={"status": "CANCELLED"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "CANCELLED"
+
+    def test_patient_cannot_mark_completed(self, client, auth_header, sample_appointment):
+        """Visit outcomes belong to the doctor portal — patients may only cancel."""
         resp = client.put(
             f"/v1/appointments/{sample_appointment.id}/status",
             headers=auth_header,
             json={"status": "COMPLETED"},
         )
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "COMPLETED"
+        assert resp.status_code == 403
 
     def test_update_appointment_invalid_status(self, client, auth_header, sample_appointment):
         resp = client.put(
@@ -98,6 +107,62 @@ class TestAppointmentsEndpoints:
             headers=auth_header,
         )
         assert resp.status_code == 409
+
+    def test_create_appointment_success(self, client, auth_header, sample_doctor, db):
+        # Create a new slot
+        slot = DoctorSlot(
+            doctor_id=sample_doctor.id,
+            date=date.today() + timedelta(days=1),
+            start_time=time(10, 0),
+            duration_minutes=30,
+            is_available=True,
+        )
+        db.add(slot)
+        db.commit()
+
+        resp = client.post(
+            "/v1/appointments/",
+            headers=auth_header,
+            json={"slot_id": slot.id, "reason": "General checkup"},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["reason"] == "General checkup"
+        assert data["slot_id"] == slot.id
+        assert data["status"] == "SCHEDULED"
+
+        # Verify slot is no longer available
+        db.refresh(slot)
+        assert slot.is_available is False
+
+    def test_create_appointment_slot_not_found(self, client, auth_header):
+        resp = client.post(
+            "/v1/appointments/",
+            headers=auth_header,
+            json={"slot_id": 99999, "reason": "Test checkup"},
+        )
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Slot not found."
+
+    def test_create_appointment_slot_unavailable(self, client, auth_header, sample_doctor, db):
+        # Create an unavailable slot
+        slot = DoctorSlot(
+            doctor_id=sample_doctor.id,
+            date=date.today() + timedelta(days=1),
+            start_time=time(11, 0),
+            duration_minutes=30,
+            is_available=False,
+        )
+        db.add(slot)
+        db.commit()
+
+        resp = client.post(
+            "/v1/appointments/",
+            headers=auth_header,
+            json={"slot_id": slot.id, "reason": "Urgent Checkup"},
+        )
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "This slot is already booked or unavailable."
 
 
 class TestRescheduleEndpoints:

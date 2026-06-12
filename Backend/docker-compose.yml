@@ -9,7 +9,7 @@ services:
       - '8080:8080'
     restart: always
     volumes:
-      - .:/app
+      - .:/BackgroundJobs
     networks:
       - default
       - appointment_network
@@ -21,7 +21,7 @@ services:
       context: .
     entrypoint: ./scripts/worker.sh
     volumes:
-      - .:/app
+      - .:/BackgroundJobs
     networks:
       - default
       - appointment_network
@@ -36,15 +36,15 @@ services:
     profiles: [ "basic-setup", "redis" ]
 
   postgresdb:
-    image: postgres
+    image: postgres:16-alpine
     container_name: postgresdb
     restart: always
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: appointment_management
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_NAME:-appointment_management}
     volumes:
-      - app-db-data:/var/lib/postgresql
+      - app-db-data:/var/lib/postgresql/data
     networks:
       - default
       - appointment_network
@@ -58,7 +58,10 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      # Set NGINX_CONF=nginx.prod.conf in .env for TLS (requires certs below)
+      - ./nginx/${NGINX_CONF:-nginx.conf}:/etc/nginx/nginx.conf:ro
+      # Place fullchain.pem + privkey.pem here (or bind-mount /etc/letsencrypt/live/<domain>)
+      - ./nginx/certs:/etc/nginx/certs:ro
     networks:
       - default
       - appointment_network

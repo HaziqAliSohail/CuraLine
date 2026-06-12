@@ -5,7 +5,7 @@ Covers: SQL injection, XSS, auth bypass, IDOR, CORS, header injection,
         password storage verification.
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from jose import jwt
 
@@ -81,7 +81,7 @@ class TestXSS:
             # JSON response — value stored literally, no execution
             assert resp.json()["name"] == payload[:50]
 
-    def test_doctor_xss_in_specialization(self, client, auth_header):
+    def test_doctor_xss_in_specialization(self, client, admin_header):
         resp = client.post("/v1/doctors/", json={
             "name": "Dr. XSS",
             "gender": "MALE",
@@ -90,7 +90,7 @@ class TestXSS:
             "consultation_fee": 100,
             "reporting_time": "09:00:00",
             "leaving_time": "17:00:00",
-        }, headers=auth_header)
+        }, headers=admin_header)
         assert resp.status_code == 201
         # Content-Type is application/json so XSS won't execute
         assert "script" in resp.json()["specialization"]
@@ -112,7 +112,7 @@ class TestJWTSecurity:
 
     def test_none_algorithm_attack(self, client, sample_patient):
         """The 'none' algorithm attack should fail."""
-        payload = {"sub": str(sample_patient.id), "exp": datetime.utcnow() + timedelta(hours=1)}
+        payload = {"sub": str(sample_patient.id), "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
         # Create unsigned token with alg=none
         import base64
         header = base64.urlsafe_b64encode(json.dumps({"alg": "none", "typ": "JWT"}).encode()).rstrip(b"=")
@@ -126,7 +126,7 @@ class TestJWTSecurity:
         assert resp.status_code == 401
 
     def test_token_with_wrong_secret(self, client, sample_patient):
-        payload = {"sub": str(sample_patient.id), "exp": datetime.utcnow() + timedelta(hours=1)}
+        payload = {"sub": str(sample_patient.id), "exp": datetime.now(timezone.utc) + timedelta(hours=1)}
         token = jwt.encode(payload, "completely-wrong-key", algorithm="HS256")
         resp = client.get(
             "/v1/patients/me",
@@ -144,7 +144,7 @@ class TestJWTSecurity:
         assert resp.status_code == 401
 
     def test_token_without_sub_claim(self, client):
-        payload = {"exp": datetime.utcnow() + timedelta(hours=1)}
+        payload = {"exp": datetime.now(timezone.utc) + timedelta(hours=1)}
         token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
         resp = client.get(
             "/v1/patients/me",
@@ -153,7 +153,7 @@ class TestJWTSecurity:
         assert resp.status_code == 401
 
     def test_expired_token(self, client, sample_patient):
-        payload = {"sub": str(sample_patient.id), "exp": datetime.utcnow() - timedelta(hours=1)}
+        payload = {"sub": str(sample_patient.id), "exp": datetime.now(timezone.utc) - timedelta(hours=1)}
         token = jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
         resp = client.get(
             "/v1/patients/me",
@@ -329,10 +329,10 @@ class TestCORSConfiguration:
 
 # ── Doctor endpoints auth ────────────────────────────────────────────
 class TestDoctorEndpointSecurity:
-    """FIXED: Doctor/slot CRUD now requires authentication."""
+    """Doctor/slot CRUD now requires admin role."""
 
     def test_create_doctor_requires_auth(self, client):
-        """Creating doctors now requires authentication."""
+        """Creating doctors requires authentication."""
         resp = client.post("/v1/doctors/", json={
             "name": "Unauthenticated",
             "gender": "MALE",
@@ -344,13 +344,26 @@ class TestDoctorEndpointSecurity:
         })
         assert resp.status_code == 401
 
+    def test_create_doctor_requires_admin(self, client, auth_header):
+        """Regular patients cannot create doctors — 403 Forbidden."""
+        resp = client.post("/v1/doctors/", json={
+            "name": "Unauthorized",
+            "gender": "MALE",
+            "specialization": "None",
+            "qualification": "None",
+            "consultation_fee": 0,
+            "reporting_time": "09:00:00",
+            "leaving_time": "17:00:00",
+        }, headers=auth_header)
+        assert resp.status_code == 403
+
     def test_delete_doctor_requires_auth(self, client, sample_doctor):
-        """Deleting doctors now requires authentication."""
+        """Deleting doctors requires authentication."""
         resp = client.delete(f"/v1/doctors/{sample_doctor.id}")
         assert resp.status_code == 401
 
     def test_slot_creation_requires_auth(self, client, sample_doctor):
-        """Creating slots now requires authentication."""
+        """Creating slots requires authentication."""
         from datetime import date, timedelta
         resp = client.post("/v1/slots/", json={
             "doctor_id": sample_doctor.id,
@@ -358,3 +371,13 @@ class TestDoctorEndpointSecurity:
             "start_time": "10:00:00",
         })
         assert resp.status_code == 401
+
+    def test_slot_creation_requires_admin(self, client, auth_header, sample_doctor):
+        """Regular patients cannot create slots — 403 Forbidden."""
+        from datetime import date, timedelta
+        resp = client.post("/v1/slots/", json={
+            "doctor_id": sample_doctor.id,
+            "date": (date.today() + timedelta(days=1)).isoformat(),
+            "start_time": "10:00:00",
+        }, headers=auth_header)
+        assert resp.status_code == 403

@@ -15,9 +15,15 @@ class AppointmentOutSchema(BaseModel):
     slot_date: date | None = None
     slot_time: time | None = None
     doctor_name: str | None = None
+    doctor_specialization: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 class AppointmentStatusUpdateSchema(BaseModel):
     status: str = Field(..., pattern="^(COMPLETED|NO_SHOW|CANCELLED)$")
+
+
+class AppointmentCreateSchema(BaseModel):
+    slot_id: int
+    reason: str | None = None

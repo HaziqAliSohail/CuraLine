@@ -27,6 +27,6 @@ describe('SeverityBadge', () => {
   it('applies correct color classes for high severity', () => {
     const { container } = render(<SeverityBadge score={4} />)
     const badge = container.querySelector('span')
-    expect(badge.className).toContain('bg-orange-100')
+    expect(badge.className).toContain('bg-orange-50')
   })
 })

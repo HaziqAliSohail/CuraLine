@@ -15,4 +15,8 @@ RUN find /BackgroundJobs/scripts -type f -exec sed -i 's/\r$//' {} \; \
 
 ENV PYTHONPATH=/BackgroundJobs
 
-EXPOSE 8000
+# Correct port: the app runs on 8080
+EXPOSE 8080
+
+# Run as non-root user for security
+USER nobody

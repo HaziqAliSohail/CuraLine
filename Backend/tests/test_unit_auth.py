@@ -42,8 +42,9 @@ class TestJWTTokens:
     def test_token_expiry_is_future(self):
         token = create_access_token(1)
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        exp = datetime.utcfromtimestamp(payload["exp"])
-        assert exp > datetime.utcnow()
+        from datetime import timezone
+        exp = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+        assert exp > datetime.now(timezone.utc)
 
     def test_token_decode_with_wrong_key_fails(self):
         token = create_access_token(1)

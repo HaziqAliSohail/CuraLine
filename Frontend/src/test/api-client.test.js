@@ -15,10 +15,15 @@ import api, {
   register,
   login,
   getMyProfile,
+  updateMyProfile,
   sendMessage,
   listDoctors,
+  createDoctor,
   listSlots,
+  createSlot,
   listAppointments,
+  listUpcomingAppointments,
+  createAppointment,
   cancelAppointment,
   listRescheduleRequests,
   acceptReschedule,
@@ -35,10 +40,15 @@ describe('API client', () => {
     expect(typeof register).toBe('function')
     expect(typeof login).toBe('function')
     expect(typeof getMyProfile).toBe('function')
+    expect(typeof updateMyProfile).toBe('function')
     expect(typeof sendMessage).toBe('function')
     expect(typeof listDoctors).toBe('function')
+    expect(typeof createDoctor).toBe('function')
     expect(typeof listSlots).toBe('function')
+    expect(typeof createSlot).toBe('function')
     expect(typeof listAppointments).toBe('function')
+    expect(typeof listUpcomingAppointments).toBe('function')
+    expect(typeof createAppointment).toBe('function')
     expect(typeof cancelAppointment).toBe('function')
     expect(typeof listRescheduleRequests).toBe('function')
     expect(typeof acceptReschedule).toBe('function')
@@ -69,19 +79,19 @@ describe('API client', () => {
     expect(result.headers.Authorization).toBeUndefined()
   })
 
-  it('response interceptor clears token on 401', () => {
+  it('response interceptor clears token on 401', async () => {
     store['token'] = 'some-token'
     const interceptor = api.interceptors.response.handlers[0]
     const error = { response: { status: 401 } }
-    expect(interceptor.rejected(error)).rejects.toBeTruthy()
+    await expect(interceptor.rejected(error)).rejects.toBeTruthy()
     expect(localStorageMock.removeItem).toHaveBeenCalledWith('token')
   })
 
-  it('response interceptor does not clear token on non-401', () => {
+  it('response interceptor does not clear token on non-401', async () => {
     store['token'] = 'some-token'
     const interceptor = api.interceptors.response.handlers[0]
     const error = { response: { status: 500 } }
-    expect(interceptor.rejected(error)).rejects.toBeTruthy()
+    await expect(interceptor.rejected(error)).rejects.toBeTruthy()
     expect(localStorageMock.removeItem).not.toHaveBeenCalled()
   })
 })

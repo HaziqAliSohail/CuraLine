@@ -8,7 +8,7 @@ class TestDoctorsEndpoints:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_create_doctor(self, client, auth_header):
+    def test_create_doctor_as_admin(self, client, admin_header):
         resp = client.post("/v1/doctors/", json={
             "name": "Dr. New",
             "gender": "FEMALE",
@@ -17,11 +17,24 @@ class TestDoctorsEndpoints:
             "consultation_fee": 300,
             "reporting_time": "09:00:00",
             "leaving_time": "17:00:00",
-        }, headers=auth_header)
+        }, headers=admin_header)
         assert resp.status_code == 201
         data = resp.json()
         assert data["name"] == "Dr. New"
         assert data["specialization"] == "Neurology"
+
+    def test_create_doctor_as_patient_forbidden(self, client, auth_header):
+        """Regular patients cannot create doctors."""
+        resp = client.post("/v1/doctors/", json={
+            "name": "Dr. Unauthorized",
+            "gender": "MALE",
+            "specialization": "None",
+            "qualification": "None",
+            "consultation_fee": 0,
+            "reporting_time": "09:00:00",
+            "leaving_time": "17:00:00",
+        }, headers=auth_header)
+        assert resp.status_code == 403
 
     def test_create_doctor_unauthenticated(self, client):
         resp = client.post("/v1/doctors/", json={
@@ -44,7 +57,7 @@ class TestDoctorsEndpoints:
         resp = client.get("/v1/doctors/9999")
         assert resp.status_code == 404
 
-    def test_update_doctor(self, client, auth_header, sample_doctor):
+    def test_update_doctor_as_admin(self, client, admin_header, sample_doctor):
         resp = client.put(f"/v1/doctors/{sample_doctor.id}", json={
             "name": "Dr. Smith Updated",
             "gender": "MALE",
@@ -53,15 +66,14 @@ class TestDoctorsEndpoints:
             "consultation_fee": 350,
             "reporting_time": "09:00:00",
             "leaving_time": "17:00:00",
-        }, headers=auth_header)
+        }, headers=admin_header)
         assert resp.status_code == 200
         assert resp.json()["name"] == "Dr. Smith Updated"
         assert float(resp.json()["consultation_fee"]) == 350.0
 
-    def test_delete_doctor(self, client, auth_header, sample_doctor):
-        resp = client.delete(f"/v1/doctors/{sample_doctor.id}", headers=auth_header)
+    def test_delete_doctor_as_admin(self, client, admin_header, sample_doctor):
+        resp = client.delete(f"/v1/doctors/{sample_doctor.id}", headers=admin_header)
         assert resp.status_code == 204
-        # Verify deleted
         resp2 = client.get(f"/v1/doctors/{sample_doctor.id}")
         assert resp2.status_code == 404
 
@@ -86,7 +98,7 @@ class TestSlotsEndpoints:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_create_slot(self, client, auth_header, sample_doctor):
+    def test_create_slot_as_admin(self, client, admin_header, sample_doctor):
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
         resp = client.post("/v1/slots/", json={
             "doctor_id": sample_doctor.id,
@@ -94,11 +106,21 @@ class TestSlotsEndpoints:
             "start_time": "10:00:00",
             "duration_minutes": 30,
             "closes_before_minutes": 15,
-        }, headers=auth_header)
+        }, headers=admin_header)
         assert resp.status_code == 201
         data = resp.json()
         assert data["doctor_id"] == sample_doctor.id
         assert data["is_available"] is True
+
+    def test_create_slot_as_patient_forbidden(self, client, auth_header, sample_doctor):
+        """Regular patients cannot create slots."""
+        tomorrow = (date.today() + timedelta(days=1)).isoformat()
+        resp = client.post("/v1/slots/", json={
+            "doctor_id": sample_doctor.id,
+            "date": tomorrow,
+            "start_time": "11:00:00",
+        }, headers=auth_header)
+        assert resp.status_code == 403
 
     def test_create_slot_unauthenticated(self, client, sample_doctor):
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
@@ -109,22 +131,22 @@ class TestSlotsEndpoints:
         })
         assert resp.status_code == 401
 
-    def test_create_slot_invalid_doctor(self, client, auth_header):
+    def test_create_slot_invalid_doctor(self, client, admin_header):
         tomorrow = (date.today() + timedelta(days=1)).isoformat()
         resp = client.post("/v1/slots/", json={
             "doctor_id": 9999,
             "date": tomorrow,
             "start_time": "10:00:00",
-        }, headers=auth_header)
+        }, headers=admin_header)
         assert resp.status_code == 404
 
-    def test_close_slot(self, client, auth_header, sample_slot):
-        resp = client.put(f"/v1/slots/{sample_slot.id}/close", headers=auth_header)
+    def test_close_slot_as_admin(self, client, admin_header, sample_slot):
+        resp = client.put(f"/v1/slots/{sample_slot.id}/close", headers=admin_header)
         assert resp.status_code == 200
         assert resp.json()["is_available"] is False
 
-    def test_delete_slot(self, client, auth_header, sample_slot):
-        resp = client.delete(f"/v1/slots/{sample_slot.id}", headers=auth_header)
+    def test_delete_slot_as_admin(self, client, admin_header, sample_slot):
+        resp = client.delete(f"/v1/slots/{sample_slot.id}", headers=admin_header)
         assert resp.status_code == 204
 
     def test_filter_by_doctor(self, client, sample_slot, sample_doctor):
@@ -133,7 +155,6 @@ class TestSlotsEndpoints:
         assert len(resp.json()) == 1
 
     def test_filter_available_only(self, client, sample_slot, db):
-        # Close the slot
         sample_slot.is_available = False
         db.commit()
         resp = client.get("/v1/slots/?available_only=true")

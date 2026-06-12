@@ -18,7 +18,7 @@ class RescheduleRequest(Base, TimestampMixin):
     triggering_appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=False)
     target_appointment_id = Column(Integer, ForeignKey("appointments.id"), nullable=False)
     proposed_slot_id = Column(Integer, ForeignKey("doctor_slots.id"), nullable=False)
-    status = Column(Enum(*STATUSES), default=PENDING)
+    status = Column(Enum(*STATUSES, name="reschedule_status_enum"), default=PENDING)
 
     triggering_appointment = relationship(
         "Appointment",

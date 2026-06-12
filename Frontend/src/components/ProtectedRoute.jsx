@@ -1,8 +1,8 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export default function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
+export default function ProtectedRoute({ children, requiredRole = 'patient' }) {
+  const { user, role, loading } = useAuth()
 
   if (loading) {
     return (
@@ -14,6 +14,11 @@ export default function ProtectedRoute({ children }) {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  // Wrong portal for this account type — send them home for their role
+  if (role !== requiredRole) {
+    return <Navigate to={role === 'doctor' ? '/doctor' : '/'} replace />
   }
 
   return children

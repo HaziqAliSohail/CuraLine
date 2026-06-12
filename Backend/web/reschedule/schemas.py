@@ -11,5 +11,7 @@ class RescheduleRequestOutSchema(BaseModel):
     status: str
     proposed_slot_date: date | None = None
     proposed_slot_time: time | None = None
+    current_slot_date: date | None = None
+    current_slot_time: time | None = None
 
     model_config = {"from_attributes": True}

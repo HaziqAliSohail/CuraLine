@@ -19,10 +19,12 @@ class Appointment(Base, TimestampMixin):
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=False)
     slot_id = Column(Integer, ForeignKey("doctor_slots.id"), nullable=False)
-    status = Column(Enum(*STATUSES), default=SCHEDULED)
+    status = Column(Enum(*STATUSES, name="appointment_status_enum"), default=SCHEDULED)
     reason = Column(Text)
     severity_score = Column(Integer, default=1)
     reschedule_requested = Column(Boolean, default=False)
+    # Set once the day-before reminder email has gone out (idempotency flag)
+    reminder_sent = Column(Boolean, default=False, nullable=False)
 
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("Doctor")

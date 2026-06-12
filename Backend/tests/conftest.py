@@ -11,6 +11,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 # Override settings BEFORE any app import
 os.environ["POSTGRES_HOST"] = "localhost"
 os.environ["OPENAI_API_KEY"] = "test-key"
+os.environ["TESTING"] = "True"
+# Use a strong test secret so the startup validation guard is satisfied
+os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-tests-to-pass-ok"
 
 import pytest
 from sqlalchemy import create_engine, event, Enum as SAEnum, String
@@ -36,8 +39,6 @@ def _compile_enum_sqlite(element, compiler, **kw):
 
 
 # ── SQLite in-memory engine ──────────────────────────────────────────
-# check_same_thread=False + StaticPool ensures the same connection is reused
-# across the test thread and the FastAPI sync endpoints thread.
 engine = create_engine(
     "sqlite:///:memory:",
     echo=False,
@@ -95,6 +96,22 @@ def sample_patient(db):
         email="patient@test.com",
         password_hash=hash_password("securepass1"),
         medical_history="No known allergies",
+        is_admin=False,
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return p
+
+
+@pytest.fixture()
+def sample_admin(db):
+    p = Patient(
+        name="Admin User",
+        gender="MALE",
+        email="admin@test.com",
+        password_hash=hash_password("securepass1"),
+        is_admin=True,
     )
     db.add(p)
     db.commit()
@@ -108,8 +125,18 @@ def patient_token(sample_patient):
 
 
 @pytest.fixture()
+def admin_token(sample_admin):
+    return create_access_token(sample_admin.id)
+
+
+@pytest.fixture()
 def auth_header(patient_token):
     return {"Authorization": f"Bearer {patient_token}"}
+
+
+@pytest.fixture()
+def admin_header(admin_token):
+    return {"Authorization": f"Bearer {admin_token}"}
 
 
 @pytest.fixture()

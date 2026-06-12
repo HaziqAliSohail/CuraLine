@@ -123,12 +123,12 @@ class TestPatientMeEndpoint:
     def test_me_expired_token(self, client, db):
         """Craft an expired token and check it's rejected."""
         from jose import jwt
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         from settings import settings
 
         expired_payload = {
             "sub": "1",
-            "exp": datetime.utcnow() - timedelta(hours=1),
+            "exp": datetime.now(timezone.utc) - timedelta(hours=1),
         }
         expired_token = jwt.encode(expired_payload, settings.secret_key, algorithm=settings.algorithm)
         resp = client.get(

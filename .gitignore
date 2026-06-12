@@ -1,14 +1,32 @@
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 .Python
 venv/
-.env
+venv_new/
 *.egg-info/
-dist/
 build/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
 uvicorn_out.txt
+
+# Secrets & local data — never commit
+.env
+*.db
+
+# Node / frontend
+node_modules/
+Frontend/dist/
+npm-debug.log*
+
+# IDE / tooling
+.idea/
+.vscode/
+.claude/
+
+# TLS certificates
+Backend/nginx/certs/*
+!Backend/nginx/certs/.gitkeep

@@ -3,6 +3,17 @@ import { Link, useNavigate } from 'react-router-dom'
 import { register, login } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
+const INSURANCE_PLANS = [
+  'Blue Cross Blue Shield',
+  'Aetna',
+  'Cigna',
+  'UnitedHealthcare',
+  'Humana',
+  'Medicare',
+  'Medicaid',
+  'Self-Pay / Uninsured',
+]
+
 export default function Register() {
   const [form, setForm] = useState({
     name: '',
@@ -11,6 +22,7 @@ export default function Register() {
     email: '',
     password: '',
     medical_history: '',
+    insurance_plan: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -123,6 +135,22 @@ export default function Register() {
               value={form.medical_history}
               onChange={set('medical_history')}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Insurance Plan <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <select
+              className="input-field"
+              value={form.insurance_plan}
+              onChange={set('insurance_plan')}
+            >
+              <option value="">Select your insurance plan...</option>
+              {INSURANCE_PLANS.map((plan) => (
+                <option key={plan} value={plan}>{plan}</option>
+              ))}
+            </select>
           </div>
 
           <button type="submit" className="btn-primary w-full" disabled={loading}>

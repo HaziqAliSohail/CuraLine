@@ -3,25 +3,110 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
   body {
-    @apply text-gray-800 antialiased;
+    @apply text-gray-800 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 min-h-screen;
+  }
+
+  /* Premium scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+
+  /* Accessible focus ring */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
   }
 }
 
 @layer components {
+  /* Buttons */
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2.5 px-5 rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2
+           bg-gradient-to-r from-primary-600 to-primary-500
+           hover:from-primary-700 hover:to-primary-600
+           active:scale-[0.97]
+           text-white font-semibold py-2.5 px-5 rounded-xl
+           transition-all duration-150
+           shadow-md shadow-primary-500/20 hover:shadow-lg hover:shadow-primary-500/30
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
   }
+
   .btn-secondary {
-    @apply bg-white hover:bg-gray-50 text-gray-700 font-medium py-2.5 px-5 rounded-lg border border-gray-300 transition-colors duration-150;
+    @apply inline-flex items-center justify-center gap-2
+           bg-white hover:bg-gray-50 active:bg-gray-100
+           active:scale-[0.97]
+           text-gray-700 font-semibold py-2.5 px-5 rounded-xl
+           border border-gray-200 hover:border-gray-300
+           transition-all duration-150
+           shadow-sm disabled:opacity-50 disabled:cursor-not-allowed;
   }
+
   .btn-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-lg transition-colors duration-150;
+    @apply inline-flex items-center justify-center gap-2
+           bg-gradient-to-r from-red-600 to-red-500
+           hover:from-red-700 hover:to-red-600
+           active:scale-[0.97]
+           text-white font-semibold py-2.5 px-5 rounded-xl
+           transition-all duration-150 shadow-sm;
   }
+
+  /* Inputs */
   .input-field {
-    @apply w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all duration-150;
+    @apply w-full px-4 py-2.5 bg-white
+           border border-gray-200 rounded-xl
+           focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500
+           outline-none transition-all duration-150
+           placeholder:text-gray-400 text-gray-800;
   }
+
+  /* Cards */
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply bg-white/80 backdrop-blur-sm rounded-2xl
+           shadow-sm shadow-gray-100 border border-gray-100/80 p-6
+           transition-shadow duration-200 hover:shadow-md hover:shadow-gray-100;
+  }
+
+  .card-glass {
+    @apply bg-white/60 backdrop-blur-md rounded-2xl
+           border border-white/70 p-6
+           shadow-lg shadow-gray-100/50;
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+
+  /* Chat typing indicator */
+  .typing-dot {
+    @apply w-2 h-2 bg-gray-400 rounded-full;
+    animation: typing-dot 1.2s ease-in-out infinite;
+  }
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  /* Skeleton loader */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded-lg;
   }
 }
