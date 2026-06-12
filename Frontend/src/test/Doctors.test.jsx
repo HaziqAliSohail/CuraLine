@@ -14,10 +14,16 @@ vi.mock('../context/ToastContext', () => ({
   }),
 }))
 
+// Mock useAuth so the component renders without an AuthProvider
+vi.mock('../context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 1, name: 'Test Patient', is_admin: false }, role: 'patient' }),
+}))
+
 vi.mock('../api/client', () => ({
   listDoctors: vi.fn(),
   listSlots: vi.fn(),
   createAppointment: vi.fn(),
+  getDoctorReviews: vi.fn(),
 }))
 
 describe('Doctors page', () => {

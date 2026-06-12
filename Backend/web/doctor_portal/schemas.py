@@ -77,6 +77,22 @@ class BriefingOutSchema(BaseModel):
     summary: str              # AI morning briefing (or deterministic fallback)
 
 
+class DoctorAnalyticsOutSchema(BaseModel):
+    """Practice insights over a trailing window. Trustworthy because visit
+    outcomes are doctor-recorded, not patient-claimed."""
+    window_days: int
+    total_appointments: int
+    completed: int
+    no_show: int
+    cancelled: int
+    scheduled: int
+    # no_show / (completed + no_show), as a percentage; None until outcomes exist
+    no_show_rate: float | None = None
+    avg_severity: float | None = None
+    severity_counts: dict[int, int]
+    busiest_weekday: str | None = None
+
+
 class DoctorRescheduleOutSchema(BaseModel):
     id: int
     status: str

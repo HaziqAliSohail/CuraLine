@@ -14,6 +14,7 @@ from web.doctor_portal.schemas import (
     BriefingOutSchema,
     BulkSlotCreateSchema,
     BulkSlotResultSchema,
+    DoctorAnalyticsOutSchema,
     DoctorAppointmentOutSchema,
     DoctorRescheduleOutSchema,
     DoctorSlotCreateSchema,
@@ -328,6 +329,72 @@ def morning_briefing(
         del _briefing_cache[k]
 
     return {**stats, "summary": summary}
+
+
+# ── Practice analytics ───────────────────────────────────────────────
+
+
+@doctor_portal_router.get("/analytics", response_model=DoctorAnalyticsOutSchema)
+def practice_analytics(
+    days: int = Query(default=30, ge=1, le=365),
+    current_doctor: Doctor = Depends(get_current_doctor),
+    db: Session = Depends(get_db_session),
+):
+    """No-show rate, case-mix, and scheduling patterns over a trailing window.
+
+    Counts every appointment whose slot falls in [today - days, today].
+    """
+    today = date_cls.today()
+    window_start = today - timedelta(days=days)
+
+    appts = (
+        db.query(Appointment)
+        .join(DoctorSlot, Appointment.slot_id == DoctorSlot.id)
+        .filter(
+            Appointment.doctor_id == current_doctor.id,
+            DoctorSlot.date >= window_start,
+            DoctorSlot.date <= today,
+        )
+        .all()
+    )
+
+    completed = sum(1 for a in appts if a.status == Appointment.COMPLETED)
+    no_show = sum(1 for a in appts if a.status == Appointment.NO_SHOW)
+    cancelled = sum(1 for a in appts if a.status == Appointment.CANCELLED)
+    scheduled = sum(1 for a in appts if a.status == Appointment.SCHEDULED)
+
+    decided = completed + no_show
+    no_show_rate = round(no_show / decided * 100, 1) if decided else None
+
+    # Case mix excludes cancellations — they never became visits
+    attended_or_due = [a for a in appts if a.status != Appointment.CANCELLED]
+    severity_counts = {s: 0 for s in range(1, 6)}
+    for a in attended_or_due:
+        severity_counts[max(1, min(5, a.severity_score or 1))] += 1
+    avg_severity = (
+        round(sum(a.severity_score or 1 for a in attended_or_due) / len(attended_or_due), 1)
+        if attended_or_due else None
+    )
+
+    weekday_counts: dict[str, int] = {}
+    for a in attended_or_due:
+        if a.slot:
+            day_name = a.slot.date.strftime("%A")
+            weekday_counts[day_name] = weekday_counts.get(day_name, 0) + 1
+    busiest_weekday = max(weekday_counts, key=weekday_counts.get) if weekday_counts else None
+
+    return {
+        "window_days": days,
+        "total_appointments": len(appts),
+        "completed": completed,
+        "no_show": no_show,
+        "cancelled": cancelled,
+        "scheduled": scheduled,
+        "no_show_rate": no_show_rate,
+        "avg_severity": avg_severity,
+        "severity_counts": severity_counts,
+        "busiest_weekday": busiest_weekday,
+    }
 
 
 # ── Reschedule visibility ────────────────────────────────────────────

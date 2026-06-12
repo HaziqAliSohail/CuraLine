@@ -14,6 +14,7 @@ import Profile from './pages/Profile'
 import DoctorDashboard from './pages/DoctorDashboard'
 import DoctorSchedule from './pages/DoctorSchedule'
 import DoctorSettings from './pages/DoctorSettings'
+import DoctorInsights from './pages/DoctorInsights'
 import ApplyDoctor from './pages/ApplyDoctor'
 import AdminApplications from './pages/AdminApplications'
 
@@ -59,6 +60,7 @@ export default function App() {
           {/* Doctor portal routes */}
           <Route path="/doctor"          element={<ProtectedRoute requiredRole="doctor"><DoctorDashboard /></ProtectedRoute>} />
           <Route path="/doctor/schedule" element={<ProtectedRoute requiredRole="doctor"><DoctorSchedule  /></ProtectedRoute>} />
+          <Route path="/doctor/insights" element={<ProtectedRoute requiredRole="doctor"><DoctorInsights  /></ProtectedRoute>} />
           <Route path="/doctor/settings" element={<ProtectedRoute requiredRole="doctor"><DoctorSettings  /></ProtectedRoute>} />
 
           {/* Default redirect */}

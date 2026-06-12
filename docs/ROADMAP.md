@@ -13,13 +13,11 @@
 - **Production hardening** — role-separated JWTs, login timing-attack guard, LLM input limits, row-locked booking/swap paths, real /health checks, TLS-ready nginx, env-driven secrets
 - **Email infrastructure** — SMTP-driven notifications: application received/approved/rejected, booking confirmations, cancellations, reschedule-request alerts, and day-before reminders (hourly idempotent Celery beat sweep via `reminder_sent` flag). Unconfigured SMTP → log-only; email failures never break a flow
 - **Verified-patient reviews** — gated on doctor-recorded COMPLETED outcomes, one per visit, privacy-abbreviated names, live doctor-rating aggregation, public listings + review modals on doctor cards, "Rate your visit" on completed appointments
+- **Practice insights (no-show analytics)** — `/doctor/analytics` + Insights page: no-show rate (from doctor-recorded outcomes), case mix by severity, busiest weekday, selectable 30/90/365-day windows
 
 ## 🔜 Next (ordered)
 
-1. **No-show analytics for doctors**
-   - Now possible because outcomes are doctor-recorded and trustworthy
-   - Per-doctor no-show rate, severity mix over time, busiest days
-2. **Doctor invite flow** — admin enters email → doctor receives link → sets own password (email infra now exists; needs a one-time token model)
+1. **Doctor invite flow** — admin enters email → doctor receives link → sets own password (email infra now exists; needs a one-time token model)
 
 ## 🇺🇸 US go-to-market blockers (build when entering the US)
 

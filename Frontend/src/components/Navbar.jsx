@@ -12,6 +12,7 @@ import {
   FiUser,
   FiUserCheck,
   FiSettings,
+  FiTrendingUp,
   FiChevronDown,
 } from 'react-icons/fi'
 
@@ -26,6 +27,7 @@ const patientNavItems = [
 const doctorNavItems = [
   { to: '/doctor',          label: 'My Day',      icon: FiHome },
   { to: '/doctor/schedule', label: 'My Schedule', icon: FiCalendar },
+  { to: '/doctor/insights', label: 'Insights',    icon: FiTrendingUp },
 ]
 
 const adminNavItem = { to: '/admin/applications', label: 'Applications', icon: FiUserCheck }

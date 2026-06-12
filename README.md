@@ -251,6 +251,7 @@ All endpoints require a **doctor-role** JWT (from `/auth/doctor/login`).
 | PUT | `/doctor/slots/{id}/close` | Stop new bookings on a slot |
 | DELETE | `/doctor/slots/{id}` | Delete an unbooked slot (409 if a patient is booked) |
 | GET | `/doctor/reschedules` | Pending severity swaps affecting my calendar |
+| GET | `/doctor/analytics?days=` | Practice insights: no-show rate, case mix by severity, busiest day (default 30-day window) |
 
 **Bulk slot generation example:**
 ```json

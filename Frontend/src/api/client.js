@@ -73,6 +73,7 @@ export const closeDoctorSlot         = (id)           => api.put(`/doctor/slots/
 export const deleteDoctorSlot        = (id)           => api.delete(`/doctor/slots/${id}`)
 export const listDoctorReschedules   = ()             => api.get('/doctor/reschedules')
 export const changeDoctorPassword    = (data)         => api.put('/doctor/me/password', data)
+export const getDoctorAnalytics      = (days)         => api.get('/doctor/analytics', { params: days ? { days } : {} })
 
 // ── Reviews (verified — gated on COMPLETED visits) ──
 export const createReview     = (data) => api.post('/reviews/', data)
