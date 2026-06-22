@@ -44,7 +44,7 @@ jobs:
       ENABLE_DOCS: "False"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # ── Backend: install, migrate, seed, serve ──
       - uses: actions/setup-python@v5
