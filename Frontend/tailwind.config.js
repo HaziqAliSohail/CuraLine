@@ -19,12 +19,14 @@ export default {
           800: '#3730a3',
           900: '#312e81',
         },
+        // Canonical severity scale — kept identical in Mobile/src/theme.js and
+        // documented in docs/BRAND.md. Never repurpose these hues.
         severity: {
-          1: '#22c55e',
-          2: '#84cc16',
-          3: '#eab308',
-          4: '#f97316',
-          5: '#ef4444',
+          1: '#10b981', // Routine  — emerald
+          2: '#84cc16', // Low      — lime
+          3: '#f59e0b', // Moderate — amber
+          4: '#f97316', // High     — orange
+          5: '#ef4444', // Critical — red
         },
       },
       keyframes: {
@@ -60,6 +62,44 @@ export default {
           '0%': { width: '100%' },
           '100%': { width: '0%' },
         },
+        /* ── Landing-page motion ── */
+        'float': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-14px)' },
+        },
+        'float-slow': {
+          '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+          '50%': { transform: 'translateY(-22px) rotate(3deg)' },
+        },
+        'aurora': {
+          '0%, 100%': { transform: 'translate(0, 0) scale(1)' },
+          '33%': { transform: 'translate(40px, -30px) scale(1.1)' },
+          '66%': { transform: 'translate(-30px, 20px) scale(0.95)' },
+        },
+        'gradient-x': {
+          '0%, 100%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+        },
+        'shimmer': {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        'reveal-up': {
+          '0%': { opacity: '0', transform: 'translateY(34px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'glow-pulse': {
+          '0%, 100%': { opacity: '0.45', transform: 'scale(1)' },
+          '50%': { opacity: '0.8', transform: 'scale(1.05)' },
+        },
+        'marquee': {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        'spin-slow': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
       },
       animation: {
         'fade-in': 'fade-in 0.25s ease-out',
@@ -70,6 +110,15 @@ export default {
         'toast-in': 'toast-in 0.35s ease-out',
         'toast-out': 'toast-out 0.3s ease-in forwards',
         'progress': 'progress 4s linear forwards',
+        'float': 'float 6s ease-in-out infinite',
+        'float-slow': 'float-slow 9s ease-in-out infinite',
+        'aurora': 'aurora 18s ease-in-out infinite',
+        'gradient-x': 'gradient-x 6s ease infinite',
+        'shimmer': 'shimmer 2.5s linear infinite',
+        'reveal-up': 'reveal-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'glow-pulse': 'glow-pulse 5s ease-in-out infinite',
+        'marquee': 'marquee 28s linear infinite',
+        'spin-slow': 'spin-slow 22s linear infinite',
       },
       backdropBlur: {
         xs: '2px',

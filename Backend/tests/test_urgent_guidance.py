@@ -49,6 +49,52 @@ class TestKBIntegrity:
         assert GUIDANCE_DISCLAIMER
         assert "not medical advice" in GUIDANCE_DISCLAIMER.lower()
 
+    def test_no_routine_otc_recommendations(self):
+        """Policy: never recommend routine OTC drugs. Only time-critical,
+        life-saving emergency meds (aspirin/EpiPen/inhaler) are allowed."""
+        banned = ("acetaminophen", "antihistamine", "lozenge",
+                  "antibiotic ointment", "pain reliever")
+        for entry in URGENT_CARE_KB:
+            g = entry["guidance"].lower()
+            for term in banned:
+                assert term not in g, (
+                    f"Routine OTC '{term}' must not be recommended: {entry['keywords']}"
+                )
+
+    def test_meds_only_in_emergency_or_as_avoidance(self):
+        """Any named medication may appear ONLY in an EMERGENCY entry (as a
+        life-saving measure) or as 'do not take / avoid' protective advice."""
+        for entry in URGENT_CARE_KB:
+            g = entry["guidance"].lower()
+            for med in ("aspirin", "ibuprofen", "epinephrine", "epipen", "inhaler"):
+                if med in g:
+                    is_avoidance = "do not" in g or "avoid" in g
+                    assert entry["action"] == "EMERGENCY" or is_avoidance, (
+                        f"Med '{med}' may only appear in EMERGENCY guidance or as "
+                        f"avoidance advice: {entry['keywords']}"
+                    )
+
+
+class TestSemanticFallback:
+    """Semantic matching is additive: keyword wins first; semantic is off unless
+    enabled with a key, and is always skipped under TESTING for determinism."""
+
+    def test_keyword_still_wins(self):
+        # An emergency phrased with KB keywords matches deterministically.
+        r = match_urgent_guidance("crushing chest pain radiating to my arm")
+        assert r is not None and r["action"] == "EMERGENCY"
+
+    def test_no_match_when_keywords_miss_and_semantic_off(self):
+        # No KB keyword present; semantic off by default -> no match.
+        assert match_urgent_guidance("my whole torso feels like it is being squeezed") is None
+
+    def test_semantic_skipped_in_testing(self, monkeypatch):
+        import clients.urgent_guidance as ug
+        monkeypatch.setattr(ug.settings, "semantic_guidance", True)
+        monkeypatch.setattr(ug.settings, "openai_api_key", "test-key")
+        # TESTING=True (conftest) forces the semantic path to no-op.
+        assert ug._semantic_match("squeezing sensation across my torso") is None
+
 
 class TestMatchUrgentGuidance:
     """Test the keyword matching function."""

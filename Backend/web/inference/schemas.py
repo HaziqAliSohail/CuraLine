@@ -58,3 +58,20 @@ class InferenceOutSchema(BaseModel):
         default=None,
         description="Guidance category: EMERGENCY, URGENT_CARE, TELEHEALTH, FIRST_AID, or null",
     )
+
+
+class InferenceJobSchema(BaseModel):
+    """Returned immediately when a chat turn is submitted. The heavy LLM work
+    runs in the background; clients poll /inference/result/{job_id}.
+
+    When no worker/broker is reachable (e.g. local dev), the server runs the
+    task inline and returns status='complete' with the result already filled,
+    so clients need no special-casing."""
+    job_id: str | None = Field(default=None, description="Poll token; null when run inline")
+    status: str = Field(description="pending | complete")
+    result: InferenceOutSchema | None = Field(default=None)
+
+
+class InferenceResultSchema(BaseModel):
+    status: str = Field(description="pending | complete | error")
+    result: InferenceOutSchema | None = Field(default=None)

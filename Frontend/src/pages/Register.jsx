@@ -2,17 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { register, login } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { INSURANCE_PLANS } from '../constants/insurance'
+import { FiEye, FiEyeOff } from 'react-icons/fi'
 
-const INSURANCE_PLANS = [
-  'Blue Cross Blue Shield',
-  'Aetna',
-  'Cigna',
-  'UnitedHealthcare',
-  'Humana',
-  'Medicare',
-  'Medicaid',
-  'Self-Pay / Uninsured',
-]
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -26,6 +18,7 @@ export default function Register() {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const { loginUser } = useAuth()
   const navigate = useNavigate()
 
@@ -39,7 +32,7 @@ export default function Register() {
       await register(form)
       // Auto-login after registration
       const res = await login({ email: form.email, password: form.password })
-      loginUser(res.data.access_token)
+      loginUser(res.data)
       navigate('/chat')
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed. Please try again.')
@@ -53,8 +46,8 @@ export default function Register() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-primary-600 rounded-2xl mb-4">
-            <span className="text-white font-bold text-xl">CL</span>
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/logo.png" alt="CuraLine Logo" className="w-24 h-24 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Create your account</h1>
           <p className="text-gray-500 mt-1">Get started with CuraLine</p>
@@ -69,8 +62,9 @@ export default function Register() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+              <label htmlFor="reg-name" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
               <input
+                id="reg-name"
                 type="text"
                 className="input-field"
                 placeholder="John Doe"
@@ -80,8 +74,8 @@ export default function Register() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-              <select className="input-field" value={form.gender} onChange={set('gender')}>
+              <label htmlFor="reg-gender" className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+              <select id="reg-gender" className="input-field" value={form.gender} onChange={set('gender')}>
                 <option value="MALE">Male</option>
                 <option value="FEMALE">Female</option>
                 <option value="OTHER">Other</option>
@@ -90,8 +84,9 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <label htmlFor="reg-phone" className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
             <input
+              id="reg-phone"
               type="tel"
               className="input-field"
               placeholder="+1 234 567 8900"
@@ -101,8 +96,9 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label htmlFor="reg-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input
+              id="reg-email"
               type="email"
               className="input-field"
               placeholder="you@example.com"
@@ -113,23 +109,35 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              className="input-field"
-              placeholder="Min. 8 characters"
-              value={form.password}
-              onChange={set('password')}
-              minLength={8}
-              required
-            />
+            <label htmlFor="reg-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <div className="relative">
+              <input
+                id="reg-password"
+                type={showPassword ? 'text' : 'password'}
+                className="input-field pr-10"
+                placeholder="Min. 8 characters"
+                value={form.password}
+                onChange={set('password')}
+                minLength={8}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+              </button>
+            </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="reg-history" className="block text-sm font-medium text-gray-700 mb-1">
               Medical History <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <textarea
+              id="reg-history"
               className="input-field h-24 resize-none"
               placeholder="Previous conditions, allergies, medications, surgeries..."
               value={form.medical_history}
@@ -138,10 +146,11 @@ export default function Register() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="reg-insurance" className="block text-sm font-medium text-gray-700 mb-1">
               Insurance Plan <span className="text-gray-400 font-normal">(optional)</span>
             </label>
             <select
+              id="reg-insurance"
               className="input-field"
               value={form.insurance_plan}
               onChange={set('insurance_plan')}

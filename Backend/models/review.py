@@ -9,7 +9,7 @@ class Review(Base, TimestampMixin):
     """A verified patient review.
 
     Integrity by construction: a review can only be created for an appointment
-    the reviewer owns AND that the doctor marked COMPLETED — so every review
+    the reviewer owns AND that the doctor marked COMPLETED - so every review
     comes from a patient who actually attended.
     """
 

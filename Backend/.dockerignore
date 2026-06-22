@@ -1,0 +1,41 @@
+# Keep secrets, local data, and dev cruft OUT of the image.
+# Without this, `COPY . .` bakes .env and venv into image layers.
+
+# Secrets & local databases — provided at runtime via env, never baked in
+.env
+.env.*
+!.env.example
+*.db
+curaline_dev.db
+
+# Virtualenvs (huge; would clobber the image's /opt/venv)
+venv/
+venv311/
+venv_new/
+.venv/
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Tests are not needed in the runtime image
+tests/
+
+# VCS / IDE / CI
+.git/
+.github/
+.idea/
+.vscode/
+.claude/
+
+# TLS material is mounted into nginx at runtime, not part of the app image
+nginx/certs/*
+!nginx/certs/.gitkeep
+
+# Misc
+*.md
+uvicorn_out.txt

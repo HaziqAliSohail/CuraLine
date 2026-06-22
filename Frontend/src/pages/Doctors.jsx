@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { listDoctors, listSlots, createAppointment, getDoctorReviews } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { FiSearch, FiUser, FiStar, FiClock, FiCalendar, FiX, FiCheckCircle, FiShield, FiMessageCircle, FiFilter } from 'react-icons/fi'
+import { INSURANCE_PLANS } from '../constants/insurance'
 
 function parseLocalDate(dateStr) {
   if (!dateStr) return null
@@ -242,25 +244,18 @@ function ReviewsModal({ doctor, onClose }) {
   )
 }
 
-const INSURANCE_PLANS = [
-  'Blue Cross Blue Shield',
-  'Aetna',
-  'Cigna',
-  'UnitedHealthcare',
-  'Humana',
-  'Medicare',
-  'Medicaid',
-  'Self-Pay / Uninsured',
-]
-
 export default function Doctors() {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [doctors, setDoctors] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [insuranceFilter, setInsuranceFilter] = useState('')
   const [selectedDoctor, setSelectedDoctor] = useState(null)
   const [reviewsDoctor, setReviewsDoctor] = useState(null)
+  const [selectedSpecialization, setSelectedSpecialization] = useState('All')
+
+  const hospitalIdParam = searchParams.get('hospital_id')
 
   // Auto-default insurance filter to the patient's own plan
   useEffect(() => {
@@ -278,11 +273,21 @@ export default function Doctors() {
       .finally(() => setLoading(false))
   }, [insuranceFilter])
 
+  useEffect(() => {
+    setSelectedSpecialization('All')
+  }, [insuranceFilter])
+
+  const specializations = ['All', ...new Set(doctors.map(d => d.specialization).filter(Boolean))]
+
   const filtered = doctors.filter(
     (d) =>
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.specialization.toLowerCase().includes(search.toLowerCase())
+      (d.name.toLowerCase().includes(search.toLowerCase()) ||
+      d.specialization.toLowerCase().includes(search.toLowerCase())) &&
+      (!hospitalIdParam || d.hospital_id === parseInt(hospitalIdParam)) &&
+      (selectedSpecialization === 'All' || d.specialization === selectedSpecialization)
   )
+
+  const selectedHospitalName = filtered.find(d => d.hospital_id === parseInt(hospitalIdParam))?.hospital_name
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
@@ -330,6 +335,43 @@ export default function Doctors() {
             aria-label="Search doctors"
           />
         </div>
+
+        {/* Specialization Quick-Filter Chips */}
+        {!loading && specializations.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none animate-fade-in">
+            {specializations.map((spec) => (
+              <button
+                key={spec}
+                onClick={() => setSelectedSpecialization(spec)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-150 border ${
+                  selectedSpecialization === spec
+                    ? 'bg-primary-600 border-primary-600 text-white shadow-sm'
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                {spec}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {hospitalIdParam && (
+          <div className="flex items-center justify-between bg-primary-50 border border-primary-100 text-primary-800 rounded-xl px-4 py-2 text-xs">
+            <span className="font-semibold flex items-center gap-1.5">
+              <span>📍 Showing doctors at:</span>
+              <span className="text-primary-700 font-bold">{selectedHospitalName || 'Selected Clinic'}</span>
+            </span>
+            <button
+              onClick={() => {
+                searchParams.delete('hospital_id')
+                setSearchParams(searchParams)
+              }}
+              className="text-primary-600 hover:text-primary-800 font-bold flex items-center gap-1 bg-white hover:bg-primary-100/50 px-2 py-1 rounded-lg border border-primary-200 transition-colors"
+            >
+              <FiX size={10} /> Clear Filter
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Grid */}
@@ -390,6 +432,9 @@ export default function Doctors() {
                   <p className="font-bold text-gray-900 text-sm truncate">{doc.name}</p>
                   <p className="text-xs text-primary-600 font-medium">{doc.specialization}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{doc.qualification}</p>
+                  {doc.hospital_name && (
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">{doc.hospital_name}</p>
+                  )}
                 </div>
               </div>
 

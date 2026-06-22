@@ -1,10 +1,15 @@
 from datetime import date as date_cls, datetime, timedelta
+import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from loguru import logger
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+
+from clients import llm_client
+from clients.prompts import PREP_BRIEFING_SYSTEM_PROMPT, NO_SHOW_PREDICTION_SYSTEM_PROMPT
 
 from database.db import get_db_session
+from web.audit import client_ip, record_audit
 from models.appointment import Appointment
 from models.doctor import Doctor
 from models.doctor_slot import DoctorSlot
@@ -26,7 +31,7 @@ from web.slots.schemas import SlotOutSchema
 
 doctor_portal_router = APIRouter()
 
-# Morning briefings are stable for a given day — cache one LLM call per doctor
+# Morning briefings are stable for a given day - cache one LLM call per doctor
 # per day in-process. {(doctor_id, iso_date): summary}
 _briefing_cache: dict[tuple[int, str], str] = {}
 
@@ -44,6 +49,9 @@ def _build_appointment_out(appt: Appointment) -> dict:
         "patient_gender": appt.patient.gender if appt.patient else None,
         "patient_phone": appt.patient.phone if appt.patient else None,
         "patient_medical_history": appt.patient.medical_history if appt.patient else None,
+        "clinical_summary": appt.clinical_summary,
+        "no_show_probability": appt.no_show_probability,
+        "no_show_risk_reason": appt.no_show_risk_reason,
     }
 
 
@@ -55,6 +63,7 @@ def get_my_doctor_profile(current_doctor: Doctor = Depends(get_current_doctor)):
 @doctor_portal_router.put("/me/password", status_code=status.HTTP_204_NO_CONTENT)
 def change_my_password(
     body: PasswordChangeSchema,
+    request: Request,
     current_doctor: Doctor = Depends(get_current_doctor),
     db: Session = Depends(get_db_session),
 ):
@@ -68,6 +77,14 @@ def change_my_password(
             detail="Current password is incorrect.",
         )
     current_doctor.password_hash = hash_password(body.new_password)
+    # Changing the password ends every other active session
+    from web.auth.security import ROLE_DOCTOR, revoke_all_refresh_tokens
+    revoke_all_refresh_tokens(db, current_doctor.id, ROLE_DOCTOR)
+    record_audit(
+        db, actor_role="doctor", actor_id=current_doctor.id,
+        action="doctor.password_change", target_type="doctor", target_id=current_doctor.id,
+        ip_address=client_ip(request),
+    )
     db.flush()
 
 
@@ -82,6 +99,7 @@ def list_my_appointments(
     appts = (
         db.query(Appointment)
         .join(DoctorSlot, Appointment.slot_id == DoctorSlot.id)
+        .options(joinedload(Appointment.slot), joinedload(Appointment.patient))
         .filter(
             Appointment.doctor_id == current_doctor.id,
             DoctorSlot.date == target_day,
@@ -96,10 +114,11 @@ def list_my_appointments(
 def record_appointment_outcome(
     appointment_id: int,
     body: OutcomeUpdateSchema,
+    request: Request,
     current_doctor: Doctor = Depends(get_current_doctor),
     db: Session = Depends(get_db_session),
 ):
-    """One-tap visit outcome: COMPLETED or NO_SHOW. Doctors only — patients cannot
+    """One-tap visit outcome: COMPLETED or NO_SHOW. Doctors only - patients cannot
     mark their own visits as completed."""
     appt = db.query(Appointment).filter(
         Appointment.id == appointment_id,
@@ -113,7 +132,15 @@ def record_appointment_outcome(
             detail="Only SCHEDULED appointments can be given an outcome.",
         )
     appt.status = body.status
+    record_audit(
+        db, actor_role="doctor", actor_id=current_doctor.id,
+        action=f"appointment.outcome_{body.status.lower()}",
+        target_type="appointment", target_id=appt.id,
+        ip_address=client_ip(request),
+    )
     db.flush()
+    from clients import analytics
+    analytics.track("appointment_outcome", appt.patient_id, status=body.status, severity=appt.severity_score)
     return _build_appointment_out(appt)
 
 
@@ -223,6 +250,7 @@ def close_my_slot(
 @doctor_portal_router.delete("/slots/{slot_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_my_slot(
     slot_id: int,
+    request: Request,
     current_doctor: Doctor = Depends(get_current_doctor),
     db: Session = Depends(get_db_session),
 ):
@@ -241,6 +269,11 @@ def delete_my_slot(
             status_code=status.HTTP_409_CONFLICT,
             detail="A patient is booked on this slot. Close it or reschedule the patient instead.",
         )
+    record_audit(
+        db, actor_role="doctor", actor_id=current_doctor.id,
+        action="slot.delete", target_type="slot", target_id=slot.id,
+        ip_address=client_ip(request),
+    )
     db.delete(slot)
 
 
@@ -249,19 +282,19 @@ def delete_my_slot(
 
 def _deterministic_briefing(doctor_name: str, appts: list[Appointment]) -> str:
     if not appts:
-        return f"Good morning, {doctor_name}. Your schedule is clear today — no appointments booked."
+        return f"Good morning, {doctor_name}. Your schedule is clear today - no appointments booked."
     critical = [a for a in appts if a.severity_score >= 4]
     parts = [f"Good morning, {doctor_name}. You have {len(appts)} patient{'s' if len(appts) != 1 else ''} today."]
     if critical:
         first = critical[0]
-        slot_time = first.slot.start_time.strftime("%I:%M %p") if first.slot else "—"
+        slot_time = first.slot.start_time.strftime("%I:%M %p") if first.slot else "-"
         parts.append(
-            f"{len(critical)} high-severity case{'s' if len(critical) != 1 else ''} — "
+            f"{len(critical)} high-severity case{'s' if len(critical) != 1 else ''} - "
             f"first is {first.patient.name if first.patient else 'a patient'} at {slot_time} "
             f"({first.reason or 'no reason recorded'}, severity {first.severity_score}/5)."
         )
     else:
-        parts.append("No high-severity cases — a routine day.")
+        parts.append("No high-severity cases - a routine day.")
     return " ".join(parts)
 
 
@@ -366,7 +399,7 @@ def practice_analytics(
     decided = completed + no_show
     no_show_rate = round(no_show / decided * 100, 1) if decided else None
 
-    # Case mix excludes cancellations — they never became visits
+    # Case mix excludes cancellations - they never became visits
     attended_or_due = [a for a in appts if a.status != Appointment.CANCELLED]
     severity_counts = {s: 0 for s in range(1, 6)}
     for a in attended_or_due:
@@ -429,3 +462,90 @@ def list_reschedules_affecting_me(
             "target_slot_time": target_slot.start_time if target_slot else None,
         })
     return out
+
+
+@doctor_portal_router.post("/appointments/{appointment_id}/regenerate-briefing", response_model=DoctorAppointmentOutSchema)
+def regenerate_briefing(
+    appointment_id: int,
+    current_doctor: Doctor = Depends(get_current_doctor),
+    db: Session = Depends(get_db_session),
+):
+    """
+    Manually triggers LLM-based regeneration of the Clinical Triage Prep Briefing
+    and the Attendance No-Show Risk calculations for an appointment.
+    """
+    appt = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.slot), joinedload(Appointment.patient))
+        .filter(
+            Appointment.id == appointment_id,
+            Appointment.doctor_id == current_doctor.id,
+        )
+        .first()
+    )
+    if not appt:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+
+    # Re-generate clinical prep briefing
+    prep_briefing = None
+    try:
+        if appt.conversation_history:
+            history_list = json.loads(appt.conversation_history)
+            convo_text = "\n".join(
+                f"{'Patient' if m.get('role') == 'user' else 'AI'}: {m.get('content')}"
+                for m in history_list
+            )
+        else:
+            convo_text = f"Patient presents with chief complaint: {appt.reason or 'Not specified'}."
+
+        prompt_input = (
+            f"Conversation History:\n{convo_text}\n\n"
+            f"Chief Complaint: {appt.reason or 'Not specified'}\n"
+            f"Severity Score: {appt.severity_score}/5\n"
+        )
+        ai_briefing = llm_client.query(
+            prompt_input,
+            system_prompt=PREP_BRIEFING_SYSTEM_PROMPT,
+        )
+        if ai_briefing and "not configured" not in ai_briefing:
+            prep_briefing = ai_briefing.strip()
+    except Exception as exc:
+        logger.warning(f"Failed to regenerate prep briefing: {exc}")
+
+    # Re-generate no-show probability prediction
+    no_show_probability = 0.15
+    no_show_risk_reason = "Low risk - acute/severe symptom profile." if appt.severity_score >= 3 else "Routine checkup with standard baseline risk."
+    try:
+        prev_appointments = (
+            db.query(Appointment)
+            .filter(Appointment.patient_id == appt.patient_id, Appointment.id != appt.id)
+            .all()
+        )
+        total_past = len(prev_appointments)
+        past_no_shows = sum(1 for a in prev_appointments if a.status == Appointment.NO_SHOW)
+        past_cancellations = sum(1 for a in prev_appointments if a.status == Appointment.CANCELLED)
+
+        prompt_input = (
+            f"Symptom/Reason: {appt.reason or 'Not specified'}\n"
+            f"Severity Score: {appt.severity_score}/5\n"
+            f"Appointment Time: {appt.slot.start_time.strftime('%I:%M %p')} on {appt.slot.date.strftime('%A')}\n"
+            f"Patient Medical History: {appt.patient.medical_history or 'None'}\n"
+            f"Historical Attendance: {total_past} total bookings, {past_no_shows} no-shows, {past_cancellations} cancellations.\n"
+        )
+
+        res = llm_client.query_structured(
+            messages=[{"role": "user", "content": prompt_input}],
+            system_prompt=NO_SHOW_PREDICTION_SYSTEM_PROMPT,
+        )
+        if res and isinstance(res, dict):
+            no_show_probability = res.get("no_show_probability", 0.15)
+            no_show_risk_reason = res.get("no_show_risk_reason", "")
+    except Exception as exc:
+        logger.warning(f"Failed to regenerate no-show prediction: {exc}")
+
+    appt.clinical_summary = prep_briefing
+    appt.no_show_probability = no_show_probability
+    appt.no_show_risk_reason = no_show_risk_reason
+    db.commit()
+
+    return _build_appointment_out(appt)

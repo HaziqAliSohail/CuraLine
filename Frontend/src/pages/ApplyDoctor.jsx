@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { doctorApply } from '../api/client'
-import { FiCheckCircle, FiShield } from 'react-icons/fi'
+import { doctorApply, listHospitals } from '../api/client'
+import { FiCheckCircle, FiShield, FiEye, FiEyeOff } from 'react-icons/fi'
 
 const SPECIALIZATIONS = [
   'Cardiology', 'Neurology', 'Orthopedics', 'Dermatology', 'Pediatrics',
@@ -12,11 +12,17 @@ export default function ApplyDoctor() {
   const [form, setForm] = useState({
     name: '', gender: 'FEMALE', email: '', phone: '',
     specialization: 'General Medicine', qualification: '',
-    license_number: '', password: '',
+    license_number: '', npi_number: '', password: '', hospital_id: '',
   })
+  const [hospitals, setHospitals] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    listHospitals().then((res) => setHospitals(res.data)).catch(() => {})
+  }, [])
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value })
 
@@ -25,7 +31,12 @@ export default function ApplyDoctor() {
     setError('')
     setLoading(true)
     try {
-      await doctorApply({ ...form, phone: form.phone || null })
+      await doctorApply({
+        ...form,
+        phone: form.phone || null,
+        npi_number: form.npi_number || null,
+        hospital_id: form.hospital_id ? Number(form.hospital_id) : null,
+      })
       setSubmitted(true)
     } catch (err) {
       const detail = err.response?.data?.detail
@@ -58,8 +69,8 @@ export default function ApplyDoctor() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-blue-100 px-4 py-10">
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-primary-600 rounded-2xl mb-4">
-            <span className="text-white font-bold text-xl">CL</span>
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/logo.png" alt="CuraLine Logo" className="w-24 h-24 object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Join CuraLine as a Doctor</h1>
           <p className="text-gray-500 mt-1 text-sm">
@@ -73,6 +84,17 @@ export default function ApplyDoctor() {
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <label htmlFor="apply-hospital" className="block text-sm font-medium text-gray-700 mb-1">Hospital / clinic</label>
+              <select id="apply-hospital" className="input-field" value={form.hospital_id} onChange={set('hospital_id')}>
+                <option value="">Independent / my own clinic</option>
+                {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Choose your hospital and its admin approves you. Independent? We'll
+                verify your NPI automatically.
+              </p>
+            </div>
             <div>
               <label htmlFor="apply-name" className="block text-sm font-medium text-gray-700 mb-1">Full name</label>
               <input id="apply-name" className="input-field" placeholder="Dr. Jane Smith"
@@ -113,9 +135,27 @@ export default function ApplyDoctor() {
                 value={form.license_number} onChange={set('license_number')} minLength={3} maxLength={50} required />
             </div>
             <div>
+              <label htmlFor="apply-npi" className="block text-sm font-medium text-gray-700 mb-1">
+                NPI number <span className="text-gray-400">(US, optional)</span>
+              </label>
+              <input id="apply-npi" className="input-field" placeholder="10 digits"
+                value={form.npi_number} onChange={set('npi_number')}
+                pattern="\d{10}" title="NPI is exactly 10 digits" maxLength={10} />
+            </div>
+            <div>
               <label htmlFor="apply-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input id="apply-password" type="password" className="input-field" placeholder="Min. 8 characters"
-                value={form.password} onChange={set('password')} minLength={8} autoComplete="new-password" required />
+              <div className="relative">
+                <input id="apply-password" type={showPassword ? 'text' : 'password'} className="input-field pr-10" placeholder="Min. 8 characters"
+                  value={form.password} onChange={set('password')} minLength={8} autoComplete="new-password" required />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -134,6 +174,10 @@ export default function ApplyDoctor() {
           <p className="text-center text-sm text-gray-500">
             Already approved?{' '}
             <Link to="/login" className="text-primary-600 hover:text-primary-700 font-medium">Sign in</Link>
+          </p>
+          <p className="text-center text-sm text-gray-500">
+            Representing a hospital or clinic?{' '}
+            <Link to="/hospital-apply" className="text-primary-600 hover:text-primary-700 font-medium">List your organization</Link>
           </p>
         </form>
       </div>

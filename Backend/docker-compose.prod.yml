@@ -1,0 +1,150 @@
+# Production stack for the CuraLine backend.
+#
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Configuration is read from the host .env file (env_file below) and injected as
+# environment variables — it is NOT baked into the image (see .dockerignore).
+# No source bind-mounts: the image is immutable and self-contained.
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: curaline-backend:latest
+  env_file: .env
+  restart: unless-stopped
+  networks: [appointment_network]
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  # One-shot: upgrade the schema exactly once, before any app process starts.
+  migrate:
+    <<: *app
+    container_name: curaline_migrate
+    command: ["./scripts/migrate.sh"]
+    restart: "no"
+    depends_on:
+      postgresdb:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    command: ["./scripts/web.sh"]
+    environment:
+      RUN_MIGRATIONS: "false"   # the migrate service owns schema upgrades
+    expose:
+      - "8080"
+    depends_on:
+      postgresdb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  worker:
+    <<: *app
+    command: ["./scripts/worker.sh"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  # Exactly ONE beat instance (drives reminders + auto-close-slots).
+  beat:
+    <<: *app
+    container_name: curaline_beat
+    command: ["./scripts/beat.sh"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  redis:
+    image: redis:7-alpine
+    container_name: curaline_redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [appointment_network]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  postgresdb:
+    image: postgres:16-alpine
+    container_name: curaline_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_NAME:-appointment_management}
+    volumes:
+      - app-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [appointment_network]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: curaline_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - certbot-webroot:/var/www/certbot:ro
+      # Built React SPA, served same-origin as the API (build it first:
+      # cd ../Frontend && npm ci && npm run build)
+      - ../Frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - web
+    networks: [appointment_network]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+networks:
+  appointment_network:
+    driver: bridge
+
+volumes:
+  app-db-data:
+  redis-data:
+  certbot-webroot:

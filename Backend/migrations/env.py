@@ -12,6 +12,10 @@ import models.doctor  # noqa: F401
 import models.appointment  # noqa: F401
 import models.doctor_slot  # noqa: F401
 import models.reschedule_request  # noqa: F401
+import models.hospital  # noqa: F401
+import models.device_token  # noqa: F401
+import models.refresh_token  # noqa: F401
+import models.review  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -24,7 +24,19 @@ if _is_sqlite:
         echo=False,
     )
 else:
-    engine = create_engine(url=_db_uri, pool_size=20, echo=False)
+    engine = create_engine(
+        url=_db_uri,
+        echo=False,
+        # Reliability: verify a connection is alive before handing it out, so a
+        # Postgres restart / idle timeout doesn't surface as a request error.
+        pool_pre_ping=True,
+        # Recycle connections before common 1h server/proxy idle limits.
+        pool_recycle=1800,
+        # Pool sizing - keep (pool_size + max_overflow) * web_workers under the
+        # Postgres max_connections (default 100). Tunable via env if needed.
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+    )
 
 # Enable FK enforcement for SQLite
 if _is_sqlite:

@@ -205,9 +205,21 @@ class TestDoctorChangePassword:
         assert resp.status_code == 422
 
 
-class TestPatientSchemaExposesAdminFlag:
-    def test_me_includes_is_admin(self, client, auth_header, admin_header):
+class TestPlatformAdminIdentity:
+    def test_patient_me_is_never_admin(self, client, auth_header):
+        # is_admin is retained on the patient schema (legacy) but admins are now a
+        # separate identity (PlatformAdmin), so patients are never admins.
         patient = client.get("/v1/patients/me", headers=auth_header).json()
         assert patient["is_admin"] is False
-        admin = client.get("/v1/patients/me", headers=admin_header).json()
-        assert admin["is_admin"] is True
+
+    def test_admin_login_issues_admin_token(self, client, sample_admin):
+        res = client.post("/v1/auth/admin/login",
+                          json={"email": "admin@test.com", "password": "securepass1"})
+        assert res.status_code == 200
+        token = res.json()["access_token"]
+        me = client.get("/v1/admin/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.status_code == 200
+        assert me.json()["role"] == "admin"
+
+    def test_patient_token_cannot_reach_admin(self, client, auth_header):
+        assert client.get("/v1/admin/me", headers=auth_header).status_code == 403

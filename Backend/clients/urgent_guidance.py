@@ -7,11 +7,21 @@ Maps symptom keywords to actionable recommendations across four categories:
   - TELEHEALTH  → Schedule a virtual consultation
   - FIRST_AID   → Self-care / home remedies
 
-⚠️  This system NEVER diagnoses conditions or recommends specific treatments
-or medications. All guidance is framed as general recommendations.
+⚠️  This system does not diagnose conditions. It avoids medication
+recommendations EXCEPT for a few time-critical, life-saving emergency measures
+(aspirin for a suspected heart attack, an EpiPen for anaphylaxis, a rescue
+inhaler for breathing difficulty) - always framed conditionally. All guidance is
+general and carries a "not medical advice" disclaimer.
 """
 
 from __future__ import annotations
+
+import math
+import os
+
+from loguru import logger
+
+from settings import settings
 
 URGENT_CARE_KB: list[dict] = [
     # ── EMERGENCY (severity floor 5) ──────────────────────────────────
@@ -22,7 +32,8 @@ URGENT_CARE_KB: list[dict] = [
         "action": "EMERGENCY",
         "guidance": (
             "Call 911 immediately. Do not drive yourself. "
-            "Chew an aspirin if you are not allergic. Stay calm and sit upright."
+            "If you are not allergic and it is readily available, an aspirin may "
+            "help while you wait for paramedics. Stay calm and sit upright."
         ),
     },
     {
@@ -123,7 +134,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "URGENT_CARE",
         "guidance": (
             "Visit urgent care if fever exceeds 103°F (39.4°C) or lasts more than 3 days. "
-            "Stay hydrated. Use acetaminophen or ibuprofen as directed. "
+            "Stay hydrated and rest. "
             "Seek ER immediately if accompanied by stiff neck, confusion, or rash."
         ),
     },
@@ -173,7 +184,7 @@ URGENT_CARE_KB: list[dict] = [
         "severity_floor": 3,
         "action": "URGENT_CARE",
         "guidance": (
-            "Clean the wound with soap and water. Visit urgent care for evaluation — "
+            "Clean the wound with soap and water. Visit urgent care for evaluation - "
             "you may need a tetanus shot or antibiotics. For snake bites, call 911."
         ),
     },
@@ -185,7 +196,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "TELEHEALTH",
         "guidance": (
             "Schedule a telehealth consultation. Stay hydrated and rest. "
-            "Take acetaminophen for fever above 101°F. Seek ER if fever exceeds 104°F."
+            "Seek ER if fever exceeds 104°F."
         ),
     },
     {
@@ -195,7 +206,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "TELEHEALTH",
         "guidance": (
             "Schedule a telehealth visit for evaluation. Gargle with warm salt water. "
-            "Stay hydrated with warm fluids. Use throat lozenges for comfort."
+            "Stay hydrated with warm fluids and rest your voice."
         ),
     },
     {
@@ -216,8 +227,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "TELEHEALTH",
         "guidance": (
             "Schedule a telehealth visit for diagnosis. Avoid scratching. "
-            "Apply cool compresses and fragrance-free moisturizer. "
-            "Take an antihistamine if itching is severe."
+            "Apply cool compresses and a fragrance-free moisturizer."
         ),
     },
     {
@@ -238,7 +248,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "TELEHEALTH",
         "guidance": (
             "Schedule a telehealth visit. Apply a warm compress to the affected ear. "
-            "Over-the-counter pain relievers can help. Do not insert anything into the ear."
+            "Do not insert anything into the ear."
         ),
     },
     {
@@ -314,8 +324,8 @@ URGENT_CARE_KB: list[dict] = [
         "severity_floor": 1,
         "action": "FIRST_AID",
         "guidance": (
-            "Clean the wound with soap and water. Apply an antibiotic ointment "
-            "and cover with a bandage. Change the bandage daily. "
+            "Clean the wound with soap and water. Cover it with a clean bandage "
+            "and change it daily. "
             "Watch for signs of infection (redness, swelling, warmth)."
         ),
     },
@@ -335,7 +345,6 @@ URGENT_CARE_KB: list[dict] = [
         "action": "FIRST_AID",
         "guidance": (
             "Rest in a quiet environment. Stay hydrated. "
-            "Over-the-counter pain relievers (acetaminophen/ibuprofen) may help. "
             "Apply a cold or warm compress to your forehead or neck."
         ),
     },
@@ -346,7 +355,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "FIRST_AID",
         "guidance": (
             "Rest the affected muscle. Apply ice for the first 48 hours, then heat. "
-            "Gentle stretching can help. Over-the-counter pain relievers may provide relief. "
+            "Gentle stretching can help. "
             "See a doctor if pain is severe or doesn't improve within a week."
         ),
     },
@@ -367,7 +376,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "FIRST_AID",
         "guidance": (
             "Clean the area with soap and water. Use sterilized tweezers to gently "
-            "remove the splinter. Apply antibiotic ointment and a bandage. "
+            "remove the splinter. Keep the area clean and cover it with a bandage. "
             "See a doctor if you cannot remove it or signs of infection develop."
         ),
     },
@@ -377,8 +386,8 @@ URGENT_CARE_KB: list[dict] = [
         "action": "FIRST_AID",
         "guidance": (
             "Apply aloe vera gel or moisturizing lotion. Take cool (not cold) baths. "
-            "Stay hydrated. Avoid further sun exposure. Use over-the-counter pain relievers "
-            "if needed. See a doctor if blistering is extensive."
+            "Stay hydrated and avoid further sun exposure. "
+            "See a doctor if blistering is extensive."
         ),
     },
     {
@@ -397,7 +406,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "FIRST_AID",
         "guidance": (
             "Do not pop the blister. Cover it with a bandage or blister pad. "
-            "If it pops on its own, clean with soap and water, apply antibiotic ointment, "
+            "If it pops on its own, clean with soap and water "
             "and cover with a sterile bandage."
         ),
     },
@@ -407,7 +416,7 @@ URGENT_CARE_KB: list[dict] = [
         "action": "FIRST_AID",
         "guidance": (
             "Remove the stinger by scraping with a flat edge (not tweezers). "
-            "Clean with soap and water. Apply ice and take an antihistamine for swelling. "
+            "Clean with soap and water. Apply ice to reduce swelling. "
             "Seek ER immediately if you experience difficulty breathing or swelling of face/throat."
         ),
     },
@@ -420,38 +429,86 @@ GUIDANCE_DISCLAIMER = (
 )
 
 
+SEMANTIC_THRESHOLD = 0.45
+_EMBED_MODEL = "text-embedding-3-small"
+_KB_VECTORS = None  # cached [(entry, vector)] once embedded
+
+
+def _entry_out(entry: dict) -> dict:
+    return {
+        "action": entry["action"],
+        "guidance": entry["guidance"],
+        "severity_floor": entry["severity_floor"],
+    }
+
+
 def match_urgent_guidance(symptoms_text: str) -> dict | None:
     """Match patient symptoms against the urgent care knowledge base.
 
-    Parameters
-    ----------
-    symptoms_text : str
-        Free-text description of patient symptoms (chief complaint + symptoms list).
-
-    Returns
-    -------
-    dict | None
-        Best matching KB entry with keys ``action``, ``guidance``, ``severity_floor``,
-        or ``None`` if no match is found.
+    Keyword matching runs first (deterministic, fast, and the basis of the
+    100%-emergency-recall CI gate). Only when keywords find nothing do we fall
+    back to optional semantic matching (embeddings) to catch phrasings the
+    keywords miss. Semantic matching is off unless SEMANTIC_GUIDANCE is enabled
+    with an OpenAI key — so behavior is unchanged without it.
     """
     if not symptoms_text:
         return None
+    return _keyword_match(symptoms_text) or _semantic_match(symptoms_text)
 
+
+def _keyword_match(symptoms_text: str) -> dict | None:
     text_lower = symptoms_text.lower()
     best_match = None
     best_score = 0
-
     for entry in URGENT_CARE_KB:
         score = sum(1 for kw in entry["keywords"] if kw in text_lower)
         if score > best_score:
             best_score = score
             best_match = entry
-
     if best_match is None or best_score == 0:
         return None
+    return _entry_out(best_match)
 
-    return {
-        "action": best_match["action"],
-        "guidance": best_match["guidance"],
-        "severity_floor": best_match["severity_floor"],
-    }
+
+def _cosine(a, b) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def _embed(texts: list[str]) -> list[list[float]]:
+    from openai import OpenAI
+    client = OpenAI(api_key=settings.openai_api_key)
+    resp = client.embeddings.create(model=_EMBED_MODEL, input=texts)
+    return [d.embedding for d in resp.data]
+
+
+def _kb_embeddings():
+    global _KB_VECTORS
+    if _KB_VECTORS is None:
+        texts = [", ".join(e["keywords"]) for e in URGENT_CARE_KB]
+        _KB_VECTORS = list(zip(URGENT_CARE_KB, _embed(texts)))
+    return _KB_VECTORS
+
+
+def _semantic_match(symptoms_text: str) -> dict | None:
+    """Embedding-similarity fallback. No-ops (returns None) in tests, when the
+    feature is off, or on any embedding failure — never raises."""
+    if os.environ.get("TESTING") == "True":
+        return None
+    if not settings.semantic_guidance or not settings.openai_api_key.strip():
+        return None
+    try:
+        query_vec = _embed([symptoms_text])[0]
+        best, best_sim = None, 0.0
+        for entry, vec in _kb_embeddings():
+            sim = _cosine(query_vec, vec)
+            if sim > best_sim:
+                best_sim, best = sim, entry
+        if best and best_sim >= SEMANTIC_THRESHOLD:
+            logger.info(f"[GUIDANCE] semantic match (sim={best_sim:.2f}) -> {best['action']}")
+            return _entry_out(best)
+    except Exception as exc:
+        logger.debug(f"semantic guidance unavailable, using keyword only: {exc}")
+    return None

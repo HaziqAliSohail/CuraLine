@@ -70,10 +70,11 @@ describe('Doctors page', () => {
     // Wait for doctor to appear
     await waitFor(() => {
       expect(screen.getByText('Dr. John Doe')).toBeInTheDocument()
-      expect(screen.getByText('Cardiology')).toBeInTheDocument()
+      // "Cardiology" appears in both the card and the specialization filter chip
+      expect(screen.getAllByText('Cardiology').length).toBeGreaterThan(0)
     })
 
-    // Doctor is AVAILABLE — "View Slots" button should exist
+    // Doctor is AVAILABLE - "View Slots" button should exist
     const viewSlotsBtn = screen.getByRole('button', { name: /Book appointment with Dr. John Doe/i })
     fireEvent.click(viewSlotsBtn)
 

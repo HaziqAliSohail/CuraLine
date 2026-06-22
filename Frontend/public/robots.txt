@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Patient/doctor app areas are auth-gated SPA routes with no useful crawl value
+Disallow: /chat
+Disallow: /appointments
+Disallow: /reschedule
+Disallow: /profile
+Disallow: /doctor
+Disallow: /admin
+Disallow: /experience
+
+Sitemap: https://curaline.com/sitemap.xml

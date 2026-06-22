@@ -136,3 +136,46 @@ class TestPatientMeEndpoint:
             headers={"Authorization": f"Bearer {expired_token}"},
         )
         assert resp.status_code == 401
+
+
+class TestPatientProfileUpdate:
+    def test_update_name_and_gender_persists(self, client, auth_header):
+        resp = client.put(
+            "/v1/patients/me",
+            headers=auth_header,
+            json={"name": "Renamed Patient", "gender": "OTHER"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["name"] == "Renamed Patient"
+        assert body["gender"] == "OTHER"
+        # Persisted across reads
+        again = client.get("/v1/patients/me", headers=auth_header).json()
+        assert again["name"] == "Renamed Patient"
+        assert again["gender"] == "OTHER"
+
+    def test_update_contact_fields(self, client, auth_header):
+        resp = client.put(
+            "/v1/patients/me",
+            headers=auth_header,
+            json={"phone": "+15550123", "insurance_plan": "Aetna", "medical_history": "Asthma"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["phone"] == "+15550123"
+        assert body["insurance_plan"] == "Aetna"
+
+    def test_empty_name_rejected(self, client, auth_header):
+        resp = client.put("/v1/patients/me", headers=auth_header, json={"name": "   "})
+        assert resp.status_code == 422
+
+    def test_invalid_gender_rejected(self, client, auth_header):
+        resp = client.put("/v1/patients/me", headers=auth_header, json={"gender": "ALIEN"})
+        assert resp.status_code == 422
+
+    def test_partial_update_leaves_others_untouched(self, client, auth_header):
+        client.put("/v1/patients/me", headers=auth_header, json={"name": "Keep Me"})
+        resp = client.put("/v1/patients/me", headers=auth_header, json={"phone": "+15550999"})
+        body = resp.json()
+        assert body["name"] == "Keep Me"
+        assert body["phone"] == "+15550999"

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { getMyProfile, getDoctorProfile } from '../api/client'
+import { getMyProfile, getDoctorProfile, getAdminProfile, revokeSession } from '../api/client'
 
 const AuthContext = createContext(null)
 
@@ -15,7 +15,10 @@ export function AuthProvider({ children }) {
       return
     }
     try {
-      const res = activeRole === 'doctor' ? await getDoctorProfile() : await getMyProfile()
+      const res =
+        activeRole === 'doctor' ? await getDoctorProfile()
+        : activeRole === 'admin' ? await getAdminProfile()
+        : await getMyProfile()
       setUser(res.data)
       setRole(activeRole)
     } catch {
@@ -35,15 +38,22 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:unauthorized', onUnauthorized)
   }, [])
 
-  const loginUser = (token, userRole = 'patient') => {
-    localStorage.setItem('token', token)
+  // Accepts the login response body ({access_token, refresh_token}) or, for
+  // backward compatibility, a bare access-token string.
+  const loginUser = (auth, userRole = 'patient') => {
+    const accessToken = typeof auth === 'string' ? auth : auth.access_token
+    localStorage.setItem('token', accessToken)
+    if (auth.refresh_token) localStorage.setItem('refresh_token', auth.refresh_token)
     localStorage.setItem('role', userRole)
     setRole(userRole)
     fetchUser(userRole)
   }
 
   const logout = () => {
+    const refreshToken = localStorage.getItem('refresh_token')
+    if (refreshToken) revokeSession(refreshToken).catch(() => {})
     localStorage.removeItem('token')
+    localStorage.removeItem('refresh_token')
     localStorage.removeItem('role')
     setUser(null)
     setRole('patient')

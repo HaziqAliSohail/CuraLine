@@ -32,6 +32,16 @@
   :focus-visible {
     @apply outline-none ring-2 ring-primary-500 ring-offset-2;
   }
+
+  /* Respect users who prefer reduced motion - disable decorative animation */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {

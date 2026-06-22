@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { changeDoctorPassword } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { FiLock, FiUser } from 'react-icons/fi'
+import { FiLock, FiUser, FiEye, FiEyeOff } from 'react-icons/fi'
 
 export default function DoctorSettings() {
   const { user } = useAuth()
   const toast = useToast()
   const [form, setForm] = useState({ current_password: '', new_password: '', confirm: '' })
   const [submitting, setSubmitting] = useState(false)
+  const [showCurrent, setShowCurrent] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -67,30 +70,60 @@ export default function DoctorSettings() {
 
         <div>
           <label htmlFor="current-password" className="block text-sm font-medium text-gray-700 mb-1">Current password</label>
-          <input
-            id="current-password" type="password" className="input-field"
-            value={form.current_password}
-            onChange={(e) => setForm({ ...form, current_password: e.target.value })}
-            autoComplete="current-password" required
-          />
+          <div className="relative">
+            <input
+              id="current-password" type={showCurrent ? 'text' : 'password'} className="input-field pr-10"
+              value={form.current_password}
+              onChange={(e) => setForm({ ...form, current_password: e.target.value })}
+              autoComplete="current-password" required
+            />
+            <button
+              type="button"
+              onClick={() => setShowCurrent(!showCurrent)}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              aria-label={showCurrent ? 'Hide password' : 'Show password'}
+            >
+              {showCurrent ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+            </button>
+          </div>
         </div>
         <div>
           <label htmlFor="new-password" className="block text-sm font-medium text-gray-700 mb-1">New password</label>
-          <input
-            id="new-password" type="password" className="input-field" placeholder="Min. 8 characters"
-            value={form.new_password}
-            onChange={(e) => setForm({ ...form, new_password: e.target.value })}
-            minLength={8} autoComplete="new-password" required
-          />
+          <div className="relative">
+            <input
+              id="new-password" type={showNew ? 'text' : 'password'} className="input-field pr-10" placeholder="Min. 8 characters"
+              value={form.new_password}
+              onChange={(e) => setForm({ ...form, new_password: e.target.value })}
+              minLength={8} autoComplete="new-password" required
+            />
+            <button
+              type="button"
+              onClick={() => setShowNew(!showNew)}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              aria-label={showNew ? 'Hide password' : 'Show password'}
+            >
+              {showNew ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+            </button>
+          </div>
         </div>
         <div>
           <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm new password</label>
-          <input
-            id="confirm-password" type="password" className="input-field"
-            value={form.confirm}
-            onChange={(e) => setForm({ ...form, confirm: e.target.value })}
-            minLength={8} autoComplete="new-password" required
-          />
+          <div className="relative">
+            <input
+              id="confirm-password" type={showConfirm ? 'text' : 'password'} className="input-field pr-10"
+              value={form.confirm}
+              onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+              minLength={8} autoComplete="new-password" required
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm(!showConfirm)}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              aria-label={showConfirm ? 'Hide password' : 'Show password'}
+            >
+              {showConfirm ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+            </button>
+          </div>
         </div>
 
         <button type="submit" className="btn-primary w-full text-sm" disabled={submitting}>

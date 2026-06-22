@@ -83,3 +83,64 @@ def test_reschedule_two_way_swap(client, sample_appointment, sample_doctor, db):
 
     # Assert 3: Reschedule request status is ACCEPTED
     assert rr.status == RescheduleRequest.ACCEPTED
+
+
+def test_severity_swap_only_targets_consented_patients(client, sample_doctor, db):
+    """A critical booking only generates swap requests for patients who opted in
+    (allow_severity_swap=True); a patient who didn't is never targeted."""
+    from unittest.mock import patch
+    from tasks.chat_tasks import chat_execution_task
+
+    def mk_patient(email, consent):
+        p = Patient(name=email, gender="MALE", email=email,
+                    password_hash=hash_password("securepass1"), allow_severity_swap=consent)
+        db.add(p); db.flush()
+        return p
+
+    consented = mk_patient("optin@test.com", True)
+    declined = mk_patient("optout@test.com", False)
+    crit = mk_patient("crit@test.com", False)
+
+    def mk_slot(t, avail):
+        s = DoctorSlot(doctor_id=sample_doctor.id, date=date.today() + timedelta(days=1),
+                       start_time=t, duration_minutes=30, closes_before_minutes=15, is_available=avail)
+        db.add(s); db.flush()
+        return s
+
+    s_consent = mk_slot(time(9, 0), False)
+    s_declined = mk_slot(time(9, 30), False)
+    mk_slot(time(15, 0), True)  # the only open slot — critical books this (latest)
+
+    for p, s in [(consented, s_consent), (declined, s_declined)]:
+        db.add(Appointment(patient_id=p.id, doctor_id=sample_doctor.id, slot_id=s.id,
+                           status=Appointment.SCHEDULED, reason="routine", severity_score=1))
+    db.commit()
+
+    with patch("database.db.connection", return_value=db):
+        with patch("clients.llmclient.LLMClient.query_structured") as mq:
+            mq.side_effect = [
+                {"stage": "intake", "collected": {
+                    "chief_complaint": "high blood pressure review needed",
+                    "symptoms": ["hypertension"], "symptom_duration": "ongoing", "pain_level": 2},
+                 "missing": [], "reply": "ok", "ready_to_analyze": True},
+                {"severity_score": 4, "recommended_specialization": "Cardiology",
+                 "analysis_summary": "BP review", "is_emergency": False},
+            ]
+            oc = db.close
+            db.close = lambda: None
+            try:
+                res = chat_execution_task(
+                    patient_id=crit.id,
+                    conversation_history=[{"role": "user", "content": "bp review"}],
+                    collected_fields={},
+                )
+            finally:
+                db.close = oc
+
+    assert res["is_booked"] is True
+    db.expire_all()
+    targets = {r.target_appointment_id for r in db.query(RescheduleRequest).all()}
+    consent_appt = db.query(Appointment).filter(Appointment.patient_id == consented.id).first()
+    declined_appt = db.query(Appointment).filter(Appointment.patient_id == declined.id).first()
+    assert consent_appt.id in targets       # opted-in patient is asked
+    assert declined_appt.id not in targets  # opted-out patient is never targeted

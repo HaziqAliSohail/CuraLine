@@ -32,7 +32,8 @@ def _recompute_doctor_rating(db: Session, doctor_id: int) -> None:
     ratings = [r.rating for r in db.query(Review).filter(Review.doctor_id == doctor_id)]
     doctor = db.query(Doctor).filter(Doctor.id == doctor_id).first()
     if doctor and ratings:
-        doctor.rating = round(sum(ratings) / len(ratings))
+        # Round half-up so a 4.5 average reads as 5, not banker's-rounded to 4.
+        doctor.rating = int(sum(ratings) / len(ratings) + 0.5)
 
 
 @reviews_router.post("/", response_model=MyReviewOutSchema, status_code=status.HTTP_201_CREATED)
@@ -42,7 +43,7 @@ def create_review(
     db: Session = Depends(get_db_session),
 ):
     """Leave a review for a visit you attended. Gated on the doctor having
-    marked the appointment COMPLETED — this is what makes reviews verified."""
+    marked the appointment COMPLETED - this is what makes reviews verified."""
     appt = db.query(Appointment).filter(
         Appointment.id == body.appointment_id,
         Appointment.patient_id == current_patient.id,
@@ -73,6 +74,8 @@ def create_review(
     _recompute_doctor_rating(db, appt.doctor_id)
     db.flush()
     db.refresh(review)
+    from clients import analytics
+    analytics.track("review_created", current_patient.id, rating=body.rating, doctor_id=appt.doctor_id)
     return review
 
 

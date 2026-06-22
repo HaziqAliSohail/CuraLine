@@ -3,17 +3,113 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="CuraLine — AI-powered hospital appointment system that prioritizes the most critical patients first. Describe your symptoms and get matched with the right doctor instantly." />
+
+    <!-- Primary SEO -->
+    <title>CuraLine - Book a Doctor Online with AI Symptom Triage</title>
+    <meta
+      name="description"
+      content="CuraLine is the AI doctor-booking app that triages your symptoms by severity and books the right specialist in seconds. Critical patients seen first. Filter by insurance, skip the phone tag, and get an appointment - free for patients."
+    />
+    <meta
+      name="keywords"
+      content="book a doctor online, AI symptom checker, same day doctor appointment, urgent care booking, find a doctor by insurance, severity triage, online appointment scheduling, telehealth, specialist booking"
+    />
+    <meta name="author" content="CuraLine" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="theme-color" content="#4f46e5" />
-    <meta property="og:title" content="CuraLine — Smart Hospital Appointments" />
-    <meta property="og:description" content="AI-powered severity-based appointment booking. Get seen by the right doctor at the right time." />
+    <link rel="canonical" href="https://curaline.com/" />
+
+    <!-- Open Graph (Facebook, LinkedIn, iMessage…) -->
+    <meta property="og:site_name" content="CuraLine" />
     <meta property="og:type" content="website" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <!-- Plus Jakarta Sans — modern, clean, readable at all sizes -->
+    <meta property="og:url" content="https://curaline.com/" />
+    <meta property="og:title" content="CuraLine - Book a Doctor Online with AI Symptom Triage" />
+    <meta
+      property="og:description"
+      content="Tell our AI what hurts. It scores how urgent you are and books the right specialist in seconds - so the sickest patients skip the line, not the small talk."
+    />
+    <meta property="og:image" content="https://curaline.com/og-image.png" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CuraLine - Book a Doctor Online with AI Symptom Triage" />
+    <meta
+      name="twitter:description"
+      content="AI severity triage books the right doctor in ~30 seconds. Critical patients first. Free for patients."
+    />
+    <meta name="twitter:image" content="https://curaline.com/og-image.png" />
+
+    <!-- Brand icons — all generated from the one CuraLine mark (Mobile/gen_icons.py),
+         identical artwork to the mobile app icon (white mark on indigo). -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <!-- Plus Jakarta Sans - modern, clean, readable at all sizes -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-    <title>CuraLine — Smart Hospital Appointments</title>
+
+    <!-- Structured data: organization + product. Helps Google understand the app. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "CuraLine",
+        "applicationCategory": "HealthApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "description": "AI-powered doctor-booking app that triages patient symptoms by severity and books the right specialist first.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "url": "https://curaline.com/"
+      }
+    </script>
+
+    <!-- Structured data: FAQ (eligible for FAQ rich results in Google) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is CuraLine a replacement for emergency services?",
+            "acceptedAnswer": { "@type": "Answer", "text": "No. If you are having a real emergency, call 911. CuraLine's AI will tell you to do exactly that if your symptoms sound serious. CuraLine is for booking the right doctor fast, not for replacing the ER." }
+          },
+          {
+            "@type": "Question",
+            "name": "How does the AI decide who is most urgent?",
+            "acceptedAnswer": { "@type": "Answer", "text": "You describe your symptoms in plain English and CuraLine scores severity from 1 to 5. A higher score means higher priority, so the most critical patients are surfaced and seen first." }
+          },
+          {
+            "@type": "Question",
+            "name": "How fast can I get an appointment?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Most bookings take about 30 seconds from describing your symptoms to a confirmed appointment with the right specialist." }
+          },
+          {
+            "@type": "Question",
+            "name": "Does CuraLine cost anything?",
+            "acceptedAnswer": { "@type": "Answer", "text": "CuraLine is free for patients." }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I choose my own doctor?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. You can request a specific doctor by name, or let the AI match you to the best available specialist for your symptoms." }
+          },
+          {
+            "@type": "Question",
+            "name": "Will CuraLine find a doctor who takes my insurance?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. You can filter to doctors who accept your insurance plan, so coverage is confirmed before you book." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is my health data safe with CuraLine?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Data is encrypted, access is restricted to your own account, and it is never sold." }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

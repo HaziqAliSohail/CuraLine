@@ -13,47 +13,95 @@ def seed():
 
     session = connection()
     try:
-        # Skip if doctors already exist
-        if session.query(Doctor).count() > 0:
-            print("Database already seeded, skipping.")
-            return
+        # Force clear existing tables to allow fresh re-seeding.
+        # Delete in FK-dependency order: children (which reference appointments/
+        # doctors/patients) before parents, or Postgres rejects the deletes.
+        from models.appointment import Appointment
+        from models.reschedule_request import RescheduleRequest
+        from models.review import Review
+        from models.hospital import Hospital
+        from models.platform_admin import PlatformAdmin
+        session.query(Review).delete()
+        session.query(RescheduleRequest).delete()
+        session.query(Appointment).delete()
+        session.query(DoctorSlot).delete()
+        session.query(Doctor).delete()
+        session.query(Hospital).delete()
+        session.query(Patient).delete()
+        # Platform operators are seeded below; clear so reseed is idempotent
+        # (unique email would otherwise collide on a second run).
+        session.query(PlatformAdmin).delete()
+        session.commit()
+
+        print("Seeding hospitals...")
+        from models.hospital import Hospital
+        h1 = Hospital(
+            name="CuraLine General Hospital",
+            address="711 7th Ave, New York, NY 10036",
+            phone="+12125550100",
+            latitude=40.7590,
+            longitude=-73.9845,
+        )
+        h2 = Hospital(
+            name="Springfield Neurology Clinic",
+            address="220 W 19th St, New York, NY 10011",
+            phone="+12125550102",
+            latitude=40.7420,
+            longitude=-74.0005,
+        )
+        h3 = Hospital(
+            name="Westside Urgent Care",
+            address="521 Columbus Ave, New York, NY 10024",
+            phone="+12125550103",
+            latitude=40.7850,
+            longitude=-73.9745,
+        )
+        h4 = Hospital(
+            name="Bayview Health Center",
+            address="135 N 7th St, Brooklyn, NY 11249",
+            phone="+17185550104",
+            latitude=40.7180,
+            longitude=-73.9575,
+        )
+        session.add_all([h1, h2, h3, h4])
+        session.flush()
 
         print("Seeding doctors...")
         doctors_data = [
-            dict(name="Dr. Sarah Jenkins", gender="FEMALE", phone="+15550101",
+            (dict(name="Dr. Sarah Jenkins", gender="FEMALE", phone="+15550101",
                  email="sarah.jenkins@curaline.com", specialization="Cardiology",
                  qualification="MD, FACC", availability_status="AVAILABLE",
                  consultation_fee=150.00, reporting_time=time(9, 0),
                  leaving_time=time(17, 0), rating=5,
                  accepted_insurance_plans=json.dumps(
-                     ["Blue Cross Blue Shield", "Aetna", "UnitedHealthcare", "Medicare"])),
-            dict(name="Dr. James Patel", gender="MALE", phone="+15550102",
+                     ["Blue Cross Blue Shield", "Aetna", "UnitedHealthcare", "Medicare"])), h1.id),
+            (dict(name="Dr. James Patel", gender="MALE", phone="+15550102",
                  email="james.patel@curaline.com", specialization="Neurology",
                  qualification="MD, DM Neurology", availability_status="AVAILABLE",
                  consultation_fee=200.00, reporting_time=time(8, 0),
                  leaving_time=time(16, 0), rating=5,
                  accepted_insurance_plans=json.dumps(
-                     ["Blue Cross Blue Shield", "Cigna", "Humana", "Medicare"])),
-            dict(name="Dr. Aisha Rahman", gender="FEMALE", phone="+15550103",
+                     ["Blue Cross Blue Shield", "Cigna", "Humana", "Medicare"])), h2.id),
+            (dict(name="Dr. Aisha Rahman", gender="FEMALE", phone="+15550103",
                  email="aisha.rahman@curaline.com", specialization="Orthopedics",
                  qualification="MS Ortho", availability_status="AVAILABLE",
                  consultation_fee=175.00, reporting_time=time(10, 0),
                  leaving_time=time(18, 0), rating=4,
                  accepted_insurance_plans=json.dumps(
-                     ["Aetna", "Cigna", "UnitedHealthcare"])),
-            dict(name="Dr. Carlos Reyes", gender="MALE", phone="+15550104",
+                     ["Aetna", "Cigna", "UnitedHealthcare"])), h3.id),
+            (dict(name="Dr. Carlos Reyes", gender="MALE", phone="+15550104",
                  email="carlos.reyes@curaline.com", specialization="General Medicine",
                  qualification="MBBS, MD", availability_status="AVAILABLE",
                  consultation_fee=100.00, reporting_time=time(9, 0),
                  leaving_time=time(17, 0), rating=4,
                  accepted_insurance_plans=json.dumps(
                      ["Blue Cross Blue Shield", "Aetna", "Cigna", "UnitedHealthcare",
-                      "Humana", "Medicare", "Medicaid", "Self-Pay / Uninsured"])),
+                      "Humana", "Medicare", "Medicaid", "Self-Pay / Uninsured"])), h4.id),
         ]
 
         doctors = []
-        for data in doctors_data:
-            doc = Doctor(**data, password_hash=hash_password("Doctor@1234"))
+        for data, hosp_id in doctors_data:
+            doc = Doctor(**data, password_hash=hash_password("Doctor@1234"), hospital_id=hosp_id)
             session.add(doc)
             session.flush()
             doctors.append(doc)
@@ -74,19 +122,17 @@ def seed():
                     )
                     session.add(slot)
 
-        print("Seeding sample patients...")
-        # Admin patient for managing doctors/slots
-        admin = Patient(
-            name="Admin User",
-            gender="MALE",
-            phone="+15559000",
+        print("Seeding platform operator...")
+        # Platform operator - a first-class identity, separate from patients.
+        from models.platform_admin import PlatformAdmin
+        admin = PlatformAdmin(
+            name="Platform Admin",
             email="admin@curaline.com",
             password_hash=hash_password("Admin@1234"),
-            medical_history=None,
-            is_admin=True,
         )
         session.add(admin)
 
+        print("Seeding sample patients...")
         # Demo patient
         demo = Patient(
             name="John Carter",

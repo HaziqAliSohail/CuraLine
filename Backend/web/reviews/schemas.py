@@ -16,7 +16,7 @@ class ReviewOutSchema(BaseModel):
     # Abbreviated for privacy, e.g. "John C."
     patient_display_name: str
     created_at: datetime | None = None
-    # Always true by construction — reviews require a doctor-recorded
+    # Always true by construction - reviews require a doctor-recorded
     # COMPLETED visit. Kept explicit so clients can badge it.
     verified: bool = True
 

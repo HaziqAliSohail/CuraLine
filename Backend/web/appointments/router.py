@@ -1,7 +1,7 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session, joinedload
 
 from database.db import get_db_session
 from models.appointment import Appointment
@@ -12,7 +12,9 @@ from web.appointments.schemas import (
     AppointmentStatusUpdateSchema,
     AppointmentCreateSchema,
 )
+from web.audit import client_ip as _client_ip, record_audit
 from web.auth.security import get_current_patient
+from scheduling import is_bookable
 
 appointments_router = APIRouter()
 
@@ -42,6 +44,7 @@ def list_appointments(
     appts = (
         db.query(Appointment)
         .join(DoctorSlot, Appointment.slot_id == DoctorSlot.id)
+        .options(joinedload(Appointment.slot), joinedload(Appointment.doctor))
         .filter(Appointment.patient_id == current_patient.id)
         .order_by(DoctorSlot.date, DoctorSlot.start_time)
         .all()
@@ -59,6 +62,7 @@ def list_upcoming_appointments(
     appts = (
         db.query(Appointment)
         .join(DoctorSlot, Appointment.slot_id == DoctorSlot.id)
+        .options(joinedload(Appointment.slot), joinedload(Appointment.doctor))
         .filter(
             Appointment.patient_id == current_patient.id,
             Appointment.status == Appointment.SCHEDULED,
@@ -88,10 +92,17 @@ def create_appointment(
             status_code=status.HTTP_409_CONFLICT,
             detail="This slot is already booked or unavailable.",
         )
+    if not is_bookable(slot):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This slot has already started or passed its booking window.",
+        )
 
     # Mark slot as unavailable atomically
     slot.is_available = False
 
+    # Direct (browse) bookings carry no triage signal, so they are routine by
+    # design (severity 1). Urgency-ranked bookings come through the AI chat flow.
     appt = Appointment(
         patient_id=current_patient.id,
         doctor_id=slot.doctor_id,
@@ -133,6 +144,7 @@ def get_appointment(
 def update_appointment_status(
     appointment_id: int,
     body: AppointmentStatusUpdateSchema,
+    request: Request,
     current_patient: Patient = Depends(get_current_patient),
     db: Session = Depends(get_db_session),
 ):
@@ -148,23 +160,35 @@ def update_appointment_status(
             detail="Only SCHEDULED appointments can change status.",
         )
     # Visit outcomes (COMPLETED / NO_SHOW) are recorded by the doctor via the
-    # doctor portal — patients may only cancel.
+    # doctor portal - patients may only cancel.
     if body.status != Appointment.CANCELLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Patients can only cancel appointments. Visit outcomes are recorded by your doctor.",
         )
     appt.status = body.status
+    slot_id_to_optimize = None
     # Cancelling via status update must free the slot, same as DELETE
     if body.status == Appointment.CANCELLED and appt.slot:
         appt.slot.is_available = True
+        slot_id_to_optimize = appt.slot_id
+    record_audit(
+        db, actor_role="patient", actor_id=current_patient.id,
+        action="appointment.cancel", target_type="appointment", target_id=appt.id,
+        ip_address=_client_ip(request),
+    )
     db.flush()
+    if slot_id_to_optimize:
+        db.commit()
+        from tasks.chat_tasks import optimize_queue_for_free_slot
+        optimize_queue_for_free_slot.delay(slot_id_to_optimize)
     return _build_out(appt)
 
 
 @appointments_router.delete("/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def cancel_appointment(
     appointment_id: int,
+    request: Request,
     current_patient: Patient = Depends(get_current_patient),
     db: Session = Depends(get_db_session),
 ):
@@ -180,9 +204,16 @@ def cancel_appointment(
             detail="Only SCHEDULED appointments can be cancelled.",
         )
     appt.status = Appointment.CANCELLED
+    slot_id_to_optimize = None
     # Free up the slot
     if appt.slot:
         appt.slot.is_available = True
+        slot_id_to_optimize = appt.slot_id
+    record_audit(
+        db, actor_role="patient", actor_id=current_patient.id,
+        action="appointment.cancel", target_type="appointment", target_id=appt.id,
+        ip_address=_client_ip(request),
+    )
     db.flush()
 
     if current_patient.email and appt.slot:
@@ -190,3 +221,9 @@ def cancel_appointment(
         slot_info = f"{appt.slot.date} at {appt.slot.start_time.strftime('%I:%M %p')}"
         doctor_name = appt.doctor.name if appt.doctor else "your doctor"
         emailer.appointment_cancelled(current_patient.email, current_patient.name, doctor_name, slot_info)
+
+    if slot_id_to_optimize:
+        db.commit()
+        from tasks.chat_tasks import optimize_queue_for_free_slot
+        optimize_queue_for_free_slot.delay(slot_id_to_optimize)
+

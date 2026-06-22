@@ -44,11 +44,8 @@ def match_local_routing(message: str, conversation_history: list, collected_fiel
 
     clean_msg = message.strip().strip(".?!,;").lower()
 
-    # 1. Post-Booking Gratitude / Closure
-    # If we already have a successful booking (e.g. stage is complete or fields are populated),
-    # any polite closing should be answered statically.
-    has_booked = collected_fields.get("chief_complaint") and len(conversation_history) > 3
-    
+    # 1. Post-Booking Gratitude / Closure - answer polite closers statically
+    #    once the assistant's previous turn was a booking confirmation.
     # Check if last message from Assistant was a booking confirmation
     last_assistant_msg = ""
     for msg in reversed(conversation_history):
@@ -75,7 +72,7 @@ def match_local_routing(message: str, conversation_history: list, collected_fiel
 
     # 2. Initial Greetings (only if conversation hasn't really started yet)
     if not collected_fields.get("chief_complaint"):
-        is_greeting = any(re.match(pat, clean_msg) for pat in GREETING_PATTERNS)
+        is_greeting = any(re.match(pat, clean_msg, re.IGNORECASE) for pat in GREETING_PATTERNS)
         if is_greeting:
             return {
                 "is_booked": False,

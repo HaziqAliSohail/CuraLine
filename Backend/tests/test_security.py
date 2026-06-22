@@ -35,7 +35,7 @@ class TestSQLInjection:
                 "email": payload,
                 "password": payload,
             })
-            # Should be 422 (invalid email) or 401 — never 200
+            # Should be 422 (invalid email) or 401 - never 200
             assert resp.status_code in (401, 422), f"Unexpected {resp.status_code} for {payload}"
 
     def test_doctor_search_sqli(self, client):
@@ -78,7 +78,7 @@ class TestXSS:
                 "password": "securepass1",
             })
             assert resp.status_code == 201
-            # JSON response — value stored literally, no execution
+            # JSON response - value stored literally, no execution
             assert resp.json()["name"] == payload[:50]
 
     def test_doctor_xss_in_specialization(self, client, admin_header):
@@ -99,7 +99,7 @@ class TestXSS:
 # ── JWT manipulation ─────────────────────────────────────────────────
 class TestJWTSecurity:
     def test_tampered_token_rejected(self, client, sample_patient):
-        """Modify the payload of a valid token — should be rejected."""
+        """Modify the payload of a valid token - should be rejected."""
         token = create_access_token(sample_patient.id)
         parts = token.split(".")
         # Tamper with the payload (flip a character)
@@ -345,7 +345,7 @@ class TestDoctorEndpointSecurity:
         assert resp.status_code == 401
 
     def test_create_doctor_requires_admin(self, client, auth_header):
-        """Regular patients cannot create doctors — 403 Forbidden."""
+        """Regular patients cannot create doctors - 403 Forbidden."""
         resp = client.post("/v1/doctors/", json={
             "name": "Unauthorized",
             "gender": "MALE",
@@ -373,7 +373,7 @@ class TestDoctorEndpointSecurity:
         assert resp.status_code == 401
 
     def test_slot_creation_requires_admin(self, client, auth_header, sample_doctor):
-        """Regular patients cannot create slots — 403 Forbidden."""
+        """Regular patients cannot create slots - 403 Forbidden."""
         from datetime import date, timedelta
         resp = client.post("/v1/slots/", json={
             "doctor_id": sample_doctor.id,

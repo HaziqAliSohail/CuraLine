@@ -16,9 +16,10 @@ export default function ProtectedRoute({ children, requiredRole = 'patient' }) {
     return <Navigate to="/login" replace />
   }
 
-  // Wrong portal for this account type — send them home for their role
+  // Wrong portal for this account type - send them home for their role
   if (role !== requiredRole) {
-    return <Navigate to={role === 'doctor' ? '/doctor' : '/'} replace />
+    const home = role === 'doctor' ? '/doctor' : role === 'admin' ? '/admin/hospitals' : '/'
+    return <Navigate to={home} replace />
   }
 
   return children

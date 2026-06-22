@@ -1,0 +1,72 @@
+name: Mobile Release (EAS)
+
+# Builds the Expo app on EAS when you push a version tag (e.g. v1.2.0).
+# Submitting to the stores is opt-in (manual run with submit=true) so a tag
+# never auto-publishes by accident.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        options: [all, android, ios]
+        default: all
+      profile:
+        description: EAS build profile
+        type: choice
+        options: [production, preview]
+        default: production
+      submit:
+        description: Submit to the stores after the build
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: EAS build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: Mobile/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      # Android Play submissions need a Google service-account key. Written from
+      # a secret only when actually submitting; path matches eas.json.
+      - name: Write Android service-account key
+        if: ${{ github.event.inputs.submit == 'true' }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICE_ACCOUNT_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > google-service-account.json
+          fi
+
+      - name: EAS build (and optional submit)
+        run: |
+          PLATFORM="${{ github.event.inputs.platform || 'all' }}"
+          PROFILE="${{ github.event.inputs.profile || 'production' }}"
+          EXTRA=""
+          if [ "${{ github.event.inputs.submit }}" = "true" ]; then
+            EXTRA="--auto-submit"
+          fi
+          echo "Building $PLATFORM on profile $PROFILE $EXTRA"
+          eas build --platform "$PLATFORM" --profile "$PROFILE" --non-interactive --no-wait $EXTRA

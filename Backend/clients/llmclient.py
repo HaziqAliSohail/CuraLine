@@ -17,7 +17,7 @@ from loguru import logger
 
 
 # ---------------------------------------------------------------------------
-# Provider adapters — normalize OpenAI and Anthropic behind a common interface
+# Provider adapters - normalize OpenAI and Anthropic behind a common interface
 # ---------------------------------------------------------------------------
 
 class _OpenAIAdapter:
@@ -102,7 +102,7 @@ class _AnthropicAdapter:
     def query(self, message, system_prompt: str = None) -> str:
         msgs = []
         if isinstance(message, list):
-            # Filter out system messages — Anthropic doesn't accept them inline
+            # Filter out system messages - Anthropic doesn't accept them inline
             for m in message:
                 if m["role"] != "system":
                     msgs.append({"role": m["role"], "content": m["content"]})
@@ -118,7 +118,7 @@ class _AnthropicAdapter:
 
 
 # ---------------------------------------------------------------------------
-# Public client — dual-provider with fallback
+# Public client - dual-provider with fallback
 # ---------------------------------------------------------------------------
 
 class LLMClient:
@@ -170,7 +170,7 @@ class LLMClient:
         self._adapters = [a for a in self._adapters if a is not None]
 
         if not self._adapters:
-            logger.warning("No LLM providers configured — all AI features will return fallback messages.")
+            logger.warning("No LLM providers configured - all AI features will return fallback messages.")
 
     @staticmethod
     def _build_adapter(api_key: str, model: str, provider: str, mapper: dict, max_tokens: int):

@@ -89,7 +89,7 @@ class TestPublicReviews:
         review = body["reviews"][0]
         assert review["verified"] is True
         assert review["comment"] == "Great visit."
-        # Privacy: full name never exposed — "Test Patient" → "Test P."
+        # Privacy: full name never exposed - "Test Patient" → "Test P."
         assert review["patient_display_name"] == "Test P."
         assert sample_patient.name not in str(body)
 

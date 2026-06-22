@@ -21,6 +21,10 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
+# Configure Celery for tests (avoid Redis dependency)
+from tasks.celery import celery
+celery.conf.task_always_eager = True
+
 from database.db import Base, get_db_session
 from main import app
 from models.patient import Patient
@@ -28,6 +32,13 @@ from models.doctor import Doctor
 from models.doctor_slot import DoctorSlot
 from models.appointment import Appointment
 from models.reschedule_request import RescheduleRequest
+# Import all remaining models so every table is registered on Base.metadata
+# before create_all runs - otherwise single-file test runs miss these tables.
+from models.review import Review
+from models.hospital import Hospital
+from models.device_token import DeviceToken
+from models.refresh_token import RefreshToken
+from models.audit_log import AuditLog
 from web.auth.security import hash_password, create_access_token
 
 # ── Compile Enum as VARCHAR on SQLite ────────────────────────────────
@@ -89,6 +100,7 @@ def client(db):
 # ── Seed helpers ─────────────────────────────────────────────────────
 @pytest.fixture()
 def sample_patient(db):
+    from web.consent.router import CURRENT_CONSENT_VERSION
     p = Patient(
         name="Test Patient",
         gender="MALE",
@@ -97,6 +109,7 @@ def sample_patient(db):
         password_hash=hash_password("securepass1"),
         medical_history="No known allergies",
         is_admin=False,
+        consent_version=CURRENT_CONSENT_VERSION,  # default patient is consented
     )
     db.add(p)
     db.commit()
@@ -106,17 +119,16 @@ def sample_patient(db):
 
 @pytest.fixture()
 def sample_admin(db):
-    p = Patient(
+    from models.platform_admin import PlatformAdmin
+    a = PlatformAdmin(
         name="Admin User",
-        gender="MALE",
         email="admin@test.com",
         password_hash=hash_password("securepass1"),
-        is_admin=True,
     )
-    db.add(p)
+    db.add(a)
     db.commit()
-    db.refresh(p)
-    return p
+    db.refresh(a)
+    return a
 
 
 @pytest.fixture()
@@ -126,7 +138,8 @@ def patient_token(sample_patient):
 
 @pytest.fixture()
 def admin_token(sample_admin):
-    return create_access_token(sample_admin.id)
+    from web.auth.security import ROLE_ADMIN
+    return create_access_token(sample_admin.id, role=ROLE_ADMIN)
 
 
 @pytest.fixture()

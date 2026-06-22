@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.orm import Session, joinedload
 
 from database.db import get_db_session
+from web.audit import client_ip, record_audit
 from models.appointment import Appointment
 from models.doctor_slot import DoctorSlot
 from models.patient import Patient
@@ -35,6 +36,10 @@ def list_reschedule_requests(
     reqs = (
         db.query(RescheduleRequest)
         .join(Appointment, RescheduleRequest.target_appointment_id == Appointment.id)
+        .options(
+            joinedload(RescheduleRequest.proposed_slot),
+            joinedload(RescheduleRequest.target_appointment).joinedload(Appointment.slot),
+        )
         .filter(
             Appointment.patient_id == current_patient.id,
             RescheduleRequest.status == RescheduleRequest.PENDING,
@@ -47,6 +52,7 @@ def list_reschedule_requests(
 @reschedule_router.post("/{request_id}/accept", response_model=RescheduleRequestOutSchema)
 def accept_reschedule(
     request_id: int,
+    request: Request,
     current_patient: Patient = Depends(get_current_patient),
     db: Session = Depends(get_db_session),
 ):
@@ -72,7 +78,7 @@ def accept_reschedule(
         Appointment.id == req.triggering_appointment_id
     ).first()
     if triggering_appt and triggering_appt.status != Appointment.SCHEDULED:
-        # The critical patient cancelled in the meantime — nothing to swap into.
+        # The critical patient cancelled in the meantime - nothing to swap into.
         req.status = RescheduleRequest.DECLINED
         target_appt.reschedule_requested = False
         db.flush()
@@ -89,15 +95,29 @@ def accept_reschedule(
     proposed_slot = db.query(DoctorSlot).filter(DoctorSlot.id == proposed_slot_id).first()
     original_slot = db.query(DoctorSlot).filter(DoctorSlot.id == original_slot_id).first()
 
-    target_appt.slot_id = proposed_slot_id
-    if proposed_slot:
-        target_appt.doctor_id = proposed_slot.doctor_id
-    target_appt.reschedule_requested = False
-
-    if triggering_appt:
-        triggering_appt.slot_id = original_slot_id
+    if req.triggering_appointment_id == req.target_appointment_id:
+        # Direct upgrade: original slot becomes vacant/available
         if original_slot:
-            triggering_appt.doctor_id = original_slot.doctor_id
+            original_slot.is_available = True
+        target_appt.slot_id = proposed_slot_id
+        if proposed_slot:
+            target_appt.doctor_id = proposed_slot.doctor_id
+        target_appt.reschedule_requested = False
+    else:
+        # Standard swap between two patients
+        target_appt.slot_id = proposed_slot_id
+        if proposed_slot:
+            target_appt.doctor_id = proposed_slot.doctor_id
+        target_appt.reschedule_requested = False
+
+        if triggering_appt:
+            triggering_appt.slot_id = original_slot_id
+            if original_slot:
+                triggering_appt.doctor_id = original_slot.doctor_id
+        elif original_slot:
+            # The critical (triggering) appointment vanished before the swap
+            # completed - free its now-empty original slot instead of stranding it.
+            original_slot.is_available = True
 
     req.status = RescheduleRequest.ACCEPTED
 
@@ -121,6 +141,13 @@ def accept_reschedule(
         if sibling_target:
             sibling_target.reschedule_requested = False
 
+    record_audit(
+        db, actor_role="patient", actor_id=current_patient.id,
+        action="reschedule.accept", target_type="reschedule_request", target_id=req.id,
+        detail={"target_appointment_id": req.target_appointment_id,
+                "triggering_appointment_id": req.triggering_appointment_id},
+        ip_address=client_ip(request),
+    )
     db.flush()
 
     return _build_out(req)
@@ -129,6 +156,7 @@ def accept_reschedule(
 @reschedule_router.post("/{request_id}/decline", response_model=RescheduleRequestOutSchema)
 def decline_reschedule(
     request_id: int,
+    request: Request,
     current_patient: Patient = Depends(get_current_patient),
     db: Session = Depends(get_db_session),
 ):
@@ -145,6 +173,16 @@ def decline_reschedule(
 
     req.status = RescheduleRequest.DECLINED
     target_appt.reschedule_requested = False
+    if req.triggering_appointment_id == req.target_appointment_id:
+        # Release the proposed slot back to the available pool
+        proposed_slot = db.query(DoctorSlot).filter(DoctorSlot.id == req.proposed_slot_id).first()
+        if proposed_slot:
+            proposed_slot.is_available = True
+    record_audit(
+        db, actor_role="patient", actor_id=current_patient.id,
+        action="reschedule.decline", target_type="reschedule_request", target_id=req.id,
+        ip_address=client_ip(request),
+    )
     db.flush()
 
     return _build_out(req)

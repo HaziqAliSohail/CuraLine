@@ -1,0 +1,37 @@
+version: 2
+updates:
+  # Backend Python deps
+  - package-ecosystem: pip
+    directory: /Backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      backend:
+        patterns: ["*"]
+
+  # Web frontend deps
+  - package-ecosystem: npm
+    directory: /Frontend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      frontend:
+        patterns: ["*"]
+
+  # Mobile (Expo) deps
+  - package-ecosystem: npm
+    directory: /Mobile
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      mobile:
+        patterns: ["*"]
+
+  # GitHub Actions versions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

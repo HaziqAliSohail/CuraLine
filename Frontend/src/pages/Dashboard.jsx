@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { listUpcomingAppointments, listRescheduleRequests } from '../api/client'
-import { FiMessageSquare, FiCalendar, FiUsers, FiAlertTriangle, FiClock, FiUser, FiChevronRight } from 'react-icons/fi'
+import { listUpcomingAppointments, listRescheduleRequests, listNearbyHospitals, listAppointments } from '../api/client'
+import { FiMessageSquare, FiCalendar, FiUsers, FiAlertTriangle, FiClock, FiUser, FiChevronRight, FiMapPin, FiPhone } from 'react-icons/fi'
 import SeverityBadge from '../components/SeverityBadge'
 
 function Greeting({ name }) {
@@ -25,6 +25,49 @@ function parseLocalDate(dateStr) {
 }
 
 function NextAppointmentCard({ appointment }) {
+  const [countdown, setCountdown] = useState('')
+  const [urgency, setUrgency] = useState('green')
+
+  useEffect(() => {
+    if (!appointment || !appointment.slot_date || !appointment.slot_time) return
+
+    const updateCountdown = () => {
+      const [hour, minute, second] = appointment.slot_time.split(':').map(Number)
+      const [year, month, day] = appointment.slot_date.split('-').map(Number)
+      const apptDateTime = new Date(year, month - 1, day, hour, minute, second || 0)
+      
+      const now = new Date()
+      const diffMs = apptDateTime - now
+      
+      if (diffMs <= 0) {
+        setCountdown('In progress')
+        setUrgency('red')
+        return
+      }
+
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffHours = Math.floor(diffMins / 60)
+      const diffDays = Math.floor(diffHours / 24)
+
+      let text = ''
+      if (diffDays > 0) {
+        text = `in ${diffDays}d ${diffHours % 24}h`
+        setUrgency('green')
+      } else if (diffHours > 0) {
+        text = `in ${diffHours}h ${diffMins % 60}m`
+        setUrgency(diffHours >= 2 ? 'amber' : 'red')
+      } else {
+        text = `in ${diffMins}m`
+        setUrgency('red')
+      }
+      setCountdown(text)
+    }
+
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 60000)
+    return () => clearInterval(interval)
+  }, [appointment])
+
   if (!appointment) {
     return (
       <div className="card-glass flex flex-col items-center justify-center py-10 text-center gap-3">
@@ -44,18 +87,29 @@ function NextAppointmentCard({ appointment }) {
     ? parseLocalDate(appointment.slot_date).toLocaleDateString('en-US', {
         weekday: 'long', month: 'long', day: 'numeric',
       })
-    : '—'
+    : '-'
 
   const slotTime = appointment.slot_time
     ? new Date(`1970-01-01T${appointment.slot_time}`).toLocaleTimeString('en-US', {
         hour: 'numeric', minute: '2-digit',
       })
-    : '—'
+    : '-'
 
   return (
     <div className="card-glass overflow-hidden relative">
       <div className="absolute top-0 right-0 w-32 h-32 bg-primary-500/5 rounded-full -translate-y-8 translate-x-8" />
-      <p className="text-xs font-semibold text-primary-600 uppercase tracking-widest mb-3">Next Appointment</p>
+      <div className="flex justify-between items-center mb-3">
+        <p className="text-xs font-semibold text-primary-600 uppercase tracking-widest">Next Appointment</p>
+        {countdown && (
+          <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+            urgency === 'red' ? 'bg-red-50 text-red-600 animate-pulse' :
+            urgency === 'amber' ? 'bg-amber-50 text-amber-600' :
+            'bg-emerald-50 text-emerald-600'
+          }`}>
+            {countdown}
+          </span>
+        )}
+      </div>
       <div className="flex items-start gap-4">
         <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md shadow-primary-500/30">
           <FiUser className="text-white" size={20} />
@@ -90,8 +144,90 @@ function NextAppointmentCard({ appointment }) {
   )
 }
 
-function RescheduleAlert({ count }) {
-  if (count === 0) return null
+function HealthSummaryCard({ appointments }) {
+  const completed = appointments.filter(a => a.status === 'COMPLETED')
+  const noShow = appointments.filter(a => a.status === 'NO_SHOW')
+  const severityEligible = appointments.filter(a => a.status === 'COMPLETED' || a.status === 'SCHEDULED')
+  const avgSeverity = severityEligible.length > 0 
+    ? (severityEligible.reduce((acc, a) => acc + a.severity_score, 0) / severityEligible.length).toFixed(1)
+    : '0.0'
+
+  let daysSinceLast = 'No past visits'
+  if (completed.length > 0) {
+    const dates = completed.map(a => new Date(a.slot_date).getTime())
+    const maxDate = Math.max(...dates)
+    const diffTime = Math.abs(new Date().setHours(0,0,0,0) - new Date(maxDate).setHours(0,0,0,0))
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    daysSinceLast = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-slide-up" style={{ animationDelay: '30ms' }}>
+      <div className="card bg-white p-4 rounded-2xl shadow-sm border border-gray-100/80 flex flex-col justify-between">
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Completed Visits</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{completed.length}</p>
+        </div>
+        <div className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md mt-3 self-start">
+          Completed
+        </div>
+      </div>
+      
+      <div className="card bg-white p-4 rounded-2xl shadow-sm border border-gray-100/80 flex flex-col justify-between">
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Missed Visits</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{noShow.length}</p>
+        </div>
+        <div className={`text-[10px] font-bold px-2 py-0.5 rounded-md mt-3 self-start ${noShow.length > 0 ? 'text-rose-600 bg-rose-50' : 'text-gray-400 bg-gray-50'}`}>
+          {noShow.length > 0 ? 'No-Show' : 'None'}
+        </div>
+      </div>
+
+      <div className="card bg-white p-4 rounded-2xl shadow-sm border border-gray-100/80 flex flex-col justify-between">
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Avg Severity</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{avgSeverity}</p>
+        </div>
+        <div className="text-[10px] text-primary-600 font-bold bg-primary-50 px-2 py-0.5 rounded-md mt-3 self-start">
+          Scale 1-10
+        </div>
+      </div>
+
+      <div className="card bg-white p-4 rounded-2xl shadow-sm border border-gray-100/80 flex flex-col justify-between">
+        <div>
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Last Checkup</p>
+          <p className="text-sm font-bold text-gray-900 mt-2.5 truncate">{daysSinceLast}</p>
+        </div>
+        <div className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md mt-3 self-start">
+          Interval
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RescheduleAlert({ requests }) {
+  if (!requests || requests.length === 0) return null
+  const count = requests.length
+  const hasUpgrade = requests.some((r) => r.triggering_appointment_id === r.target_appointment_id)
+
+  if (hasUpgrade) {
+    return (
+      <div className="bg-primary-50 border border-primary-200 rounded-2xl p-4 flex items-center gap-3 animate-fade-in">
+        <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <FiClock className="text-primary-600" size={18} />
+        </div>
+        <div className="flex-1">
+          <p className="font-semibold text-primary-800 text-sm">
+            Earlier Slot Available!
+          </p>
+          <p className="text-primary-600 text-xs mt-0.5">We optimized the queue and found an earlier appointment slot for you.</p>
+        </div>
+        <Link to="/reschedule" className="btn-primary text-sm py-2 px-3">Review & Upgrade</Link>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 animate-fade-in">
       <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -138,23 +274,143 @@ const actions = [
   },
 ]
 
+function NearestFacilityCard() {
+  const [nearest, setNearest] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [isGps, setIsGps] = useState(false)
+
+  useEffect(() => {
+    const fetchLocationAndFacility = async () => {
+      setLoading(true)
+      const getCoords = () => {
+        return new Promise((resolve) => {
+          if (!navigator.geolocation) {
+            resolve({ latitude: 40.7580, longitude: -73.9855, isGps: false })
+            return
+          }
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                isGps: true,
+              })
+            },
+            () => {
+              resolve({ latitude: 40.7580, longitude: -73.9855, isGps: false })
+            },
+            { timeout: 8000 }
+          )
+        })
+      }
+
+      const coords = await getCoords()
+      setIsGps(coords.isGps)
+
+      try {
+        const res = await listNearbyHospitals({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        })
+        if (res.data && res.data.length > 0) {
+          setNearest(res.data[0])
+        }
+      } catch (err) {
+        // silent
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchLocationAndFacility()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="card-glass animate-pulse">
+        <div className="skeleton h-4 w-36 mb-4" />
+        <div className="flex gap-4">
+          <div className="skeleton w-12 h-12 rounded-2xl flex-shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="skeleton h-5 w-2/3" />
+            <div className="skeleton h-4 w-1/2" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!nearest) return null
+
+  return (
+    <div className="card-glass overflow-hidden relative">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full -translate-y-8 translate-x-8" />
+      <div className="flex justify-between items-start mb-3">
+        <p className="text-xs font-semibold text-emerald-600 uppercase tracking-widest">
+          Nearest Care Facility
+        </p>
+        <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+          {isGps ? '📍 GPS active' : '📍 New York Center'}
+        </span>
+      </div>
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-md shadow-emerald-500/30">
+          <FiMapPin className="text-white" size={20} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start gap-2">
+            <p className="font-bold text-gray-900 text-lg truncate">{nearest.name}</p>
+            {nearest.distance !== null && (
+              <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg flex-shrink-0">
+                {nearest.distance} mi
+              </span>
+            )}
+          </div>
+          <p className="text-gray-500 text-sm mt-1">{nearest.address}</p>
+          <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-400">
+            {nearest.phone && (
+              <span className="flex items-center gap-1.5">
+                <FiPhone size={13} /> {nearest.phone}
+              </span>
+            )}
+            <span className="flex items-center gap-1.5 text-emerald-600 font-semibold">
+              <FiUsers size={13} /> {nearest.doctor_count} provider{nearest.doctor_count !== 1 ? 's' : ''} available
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-3 mt-4">
+        <Link
+          to={`/doctors?hospital_id=${nearest.id}`}
+          className="btn-primary text-xs py-2 px-3 flex items-center gap-1"
+        >
+          Browse Doctors Here <FiChevronRight size={12} />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [upcoming, setUpcoming] = useState([])
-  const [pendingCount, setPendingCount] = useState(0)
+  const [pendingRequests, setPendingRequests] = useState([])
+  const [allAppointments, setAllAppointments] = useState([])
   const [loading, setLoading] = useState(true)
 
   const load = async () => {
     try {
-      const [apptRes, reschedRes] = await Promise.all([
+      const [apptRes, reschedRes, allRes] = await Promise.all([
         listUpcomingAppointments(),
         listRescheduleRequests(),
+        listAppointments(),
       ])
       setUpcoming(apptRes.data)
-      setPendingCount(reschedRes.data.length)
+      setPendingRequests(reschedRes.data)
+      setAllAppointments(allRes.data)
     } catch {
-      // silent — partials OK
+      // silent - partials OK
     } finally {
       setLoading(false)
     }
@@ -181,9 +437,20 @@ export default function Dashboard() {
         <Greeting name={user?.name} />
       </div>
 
+      {/* Health Summary */}
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 animate-pulse">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="card h-24 skeleton" />
+          ))}
+        </div>
+      ) : (
+        <HealthSummaryCard appointments={allAppointments} />
+      )}
+
       {/* Reschedule alert */}
       <div className="animate-slide-up" style={{ animationDelay: '60ms' }}>
-        <RescheduleAlert count={pendingCount} />
+        <RescheduleAlert requests={pendingRequests} />
       </div>
 
       {/* Next appointment */}
@@ -203,6 +470,11 @@ export default function Dashboard() {
         ) : (
           <NextAppointmentCard appointment={upcoming[0] || null} />
         )}
+      </div>
+
+      {/* Nearest Care Facility */}
+      <div className="animate-slide-up" style={{ animationDelay: '150ms' }}>
+        <NearestFacilityCard />
       </div>
 
       {/* Quick actions */}

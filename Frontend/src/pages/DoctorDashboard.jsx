@@ -5,6 +5,8 @@ import {
   listDoctorAppointments,
   listDoctorReschedules,
   recordOutcome,
+  regenerateBriefing,
+  getAppointmentVideo,
 } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
@@ -13,6 +15,7 @@ import StatusBadge from '../components/StatusBadge'
 import {
   FiSunrise, FiChevronLeft, FiChevronRight, FiClock, FiCheck,
   FiUserX, FiChevronDown, FiPhone, FiFileText, FiRefreshCw, FiCalendar,
+  FiCpu, FiAlertCircle, FiVideo,
 } from 'react-icons/fi'
 
 const SEVERITY_STRIP = {
@@ -20,7 +23,7 @@ const SEVERITY_STRIP = {
 }
 
 function fmtTime(t) {
-  return t ? new Date(`1970-01-01T${t}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'
+  return t ? new Date(`1970-01-01T${t}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-'
 }
 
 function toISODate(d) {
@@ -89,9 +92,17 @@ function BriefingCard({ briefing, loading }) {
 }
 
 /* ── Appointment row with expandable triage intel ──────────────────── */
-function AppointmentRow({ appt, isToday, onOutcome, acting }) {
+function AppointmentRow({ appt, isToday, isPastOrToday, onOutcome, acting, onRegenerate, onJoinVideo }) {
   const [expanded, setExpanded] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
   const strip = SEVERITY_STRIP[appt.severity_score] || SEVERITY_STRIP[1]
+
+  const handleRegenerateClick = async (e) => {
+    e.stopPropagation()
+    setRegenerating(true)
+    await onRegenerate(appt.id)
+    setRegenerating(false)
+  }
 
   return (
     <div className="card !p-0 overflow-hidden animate-fade-in">
@@ -123,8 +134,14 @@ function AppointmentRow({ appt, isToday, onOutcome, acting }) {
               {expanded ? 'Hide patient details' : 'Patient details'}
             </button>
 
-            {appt.status === 'SCHEDULED' && isToday && (
+            {appt.status === 'SCHEDULED' && isPastOrToday && (
               <div className="flex gap-2">
+                <button
+                  onClick={() => onJoinVideo(appt.id)}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 hover:bg-primary-100 transition-colors"
+                >
+                  <FiVideo size={12} /> Video
+                </button>
                 <button
                   onClick={() => onOutcome(appt.id, 'NO_SHOW')}
                   disabled={!!acting}
@@ -157,6 +174,72 @@ function AppointmentRow({ appt, isToday, onOutcome, acting }) {
                   {appt.patient_medical_history || 'No medical history on file.'}
                 </p>
               </div>
+
+              {/* AI Prep Briefing Card */}
+              <div className="mt-3 bg-indigo-50/50 border border-indigo-100 rounded-xl p-3.5 shadow-sm shadow-indigo-500/5 animate-fade-in relative">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <p className="text-xs font-bold text-indigo-800 flex items-center gap-1.5">
+                    <FiCpu size={14} className={`text-indigo-600 ${regenerating ? 'animate-spin' : 'animate-pulse'}`} />
+                    AI Doctor Prep Briefing
+                  </p>
+                  <button
+                    onClick={handleRegenerateClick}
+                    disabled={regenerating}
+                    className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                    aria-label="Regenerate AI Triage"
+                  >
+                    <FiRefreshCw size={10} className={regenerating ? 'animate-spin' : ''} />
+                    {regenerating ? 'Regenerating...' : 'Regenerate'}
+                  </button>
+                </div>
+                {appt.clinical_summary ? (
+                  <p className="text-xs text-indigo-900 leading-relaxed font-medium">
+                    {appt.clinical_summary}
+                  </p>
+                ) : (
+                  <p className="text-xs text-indigo-400 italic leading-relaxed">
+                    AI briefing is not available. Click Regenerate to build one.
+                  </p>
+                )}
+              </div>
+
+              {/* No-Show Attendance Card */}
+              {appt.no_show_probability !== undefined && appt.no_show_probability !== null ? (
+                <div className="mt-2.5 bg-gray-50 border border-gray-100 rounded-xl p-3 flex items-start gap-3 shadow-sm shadow-gray-500/5 animate-fade-in">
+                  <div className="mt-0.5">
+                    <FiAlertCircle size={15} className={
+                      appt.no_show_probability >= 0.7 ? 'text-red-500' :
+                      appt.no_show_probability >= 0.3 ? 'text-amber-500' : 'text-emerald-500'
+                    } />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                      No-Show Risk:{' '}
+                      <span className={
+                        appt.no_show_probability >= 0.7 ? 'text-red-600 font-extrabold' :
+                        appt.no_show_probability >= 0.3 ? 'text-amber-600 font-extrabold' : 'text-emerald-600 font-extrabold'
+                      }>
+                        {Math.round(appt.no_show_probability * 100)}%
+                      </span>
+                    </p>
+                    {appt.no_show_risk_reason && (
+                      <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                        {appt.no_show_risk_reason}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2.5 bg-gray-50 border border-gray-100 rounded-xl p-3 flex items-start gap-3 shadow-sm shadow-gray-500/5 animate-fade-in">
+                  <div className="mt-0.5">
+                    <FiAlertCircle size={15} className="text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-700">No-Show Risk: Not calculated</p>
+                    <p className="text-xs text-gray-400 italic mt-0.5">Click Regenerate above to calculate attendance risk.</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -196,6 +279,7 @@ export default function DoctorDashboard() {
 
   const today = toISODate(new Date())
   const isToday = day === today
+  const isPastOrToday = day <= today
 
   const loadDay = async (targetDay) => {
     try {
@@ -246,6 +330,32 @@ export default function DoctorDashboard() {
     }
   }
 
+  const handleJoinVideo = async (id) => {
+    try {
+      const { data } = await getAppointmentVideo(id)
+      if (data.enabled && data.url) {
+        window.open(data.url, '_blank', 'noopener')
+      } else {
+        const notify = toast.info || toast.success || toast.error
+        notify(data.message || "Video visits aren't enabled yet.")
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not start the video visit.')
+    }
+  }
+
+  const handleRegenerate = async (id) => {
+    try {
+      const res = await regenerateBriefing(id)
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, ...res.data } : a))
+      )
+      toast.success('AI Triage insights regenerated successfully.', 'Regenerated')
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not regenerate AI Triage.')
+    }
+  }
+
   const dayLabel = isToday
     ? 'Today'
     : parseLocalDate(day)?.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
@@ -270,7 +380,7 @@ export default function DoctorDashboard() {
       {/* Day navigator */}
       <div className="flex items-center justify-between animate-slide-up" style={{ animationDelay: '160ms' }}>
         <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest">
-          Schedule — {dayLabel}
+          Schedule - {dayLabel}
         </h2>
         <div className="flex items-center gap-1">
           <button onClick={() => shiftDay(-1)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500" aria-label="Previous day">
@@ -306,8 +416,11 @@ export default function DoctorDashboard() {
               key={appt.id}
               appt={appt}
               isToday={isToday}
+              isPastOrToday={isPastOrToday}
               onOutcome={handleOutcome}
               acting={outcomeLoading[appt.id]}
+              onRegenerate={handleRegenerate}
+              onJoinVideo={handleJoinVideo}
             />
           ))}
         </div>

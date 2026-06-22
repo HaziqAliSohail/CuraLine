@@ -53,7 +53,7 @@ export default function DoctorInsights() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Practice Insights</h1>
           <p className="text-gray-400 text-sm mt-1">
-            Built on outcomes you record — accurate by construction.
+            Built on outcomes you record - accurate by construction.
           </p>
         </div>
         <div className="flex gap-1.5" role="group" aria-label="Time window">
@@ -98,18 +98,18 @@ export default function DoctorInsights() {
             <StatCard
               icon={FiUserX} iconBg="bg-red-50" iconColor="text-red-500"
               label="No-show rate"
-              value={data.no_show_rate !== null ? `${data.no_show_rate}%` : '—'}
+              value={data.no_show_rate !== null ? `${data.no_show_rate}%` : '-'}
               hint={data.no_show_rate !== null ? `${data.no_show} no-show${data.no_show !== 1 ? 's' : ''}` : 'No outcomes recorded yet'}
             />
             <StatCard
               icon={FiActivity} iconBg="bg-amber-50" iconColor="text-amber-600"
               label="Avg severity"
-              value={data.avg_severity !== null ? `${data.avg_severity}/5` : '—'}
+              value={data.avg_severity !== null ? `${data.avg_severity}/5` : '-'}
               hint="Across non-cancelled visits"
             />
             <StatCard
               icon={FiCalendar} iconBg="bg-violet-50" iconColor="text-violet-600"
-              label="Busiest day" value={data.busiest_weekday || '—'}
+              label="Busiest day" value={data.busiest_weekday || '-'}
               hint={`${data.scheduled} still scheduled`}
             />
           </div>

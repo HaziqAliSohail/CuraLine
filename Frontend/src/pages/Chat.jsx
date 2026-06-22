@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { sendMessage } from '../api/client'
+import { sendMessage, getConsent, acceptConsent } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import SeverityBadge from '../components/SeverityBadge'
@@ -25,7 +25,7 @@ function EmergencyBanner({ analysis }) {
         <FiAlertOctagon className="text-red-600" size={20} />
       </div>
       <div>
-        <p className="font-bold text-red-800 text-sm">Emergency Detected — Call 911 Now</p>
+        <p className="font-bold text-red-800 text-sm">Emergency Detected - Call 911 Now</p>
         <p className="text-red-600 text-xs mt-1 leading-relaxed">{analysis}</p>
         <a
           href="tel:911"
@@ -63,7 +63,7 @@ const GUIDANCE_CONFIG = {
     textColor: 'text-red-600',
     disclaimerColor: 'text-red-400',
     Icon: FiAlertOctagon,
-    title: 'Emergency — Call 911 Immediately',
+    title: 'Emergency - Call 911 Immediately',
   },
   URGENT_CARE: {
     bg: 'bg-orange-50',
@@ -134,6 +134,27 @@ function UrgentGuidanceBanner({ guidanceType, guidance }) {
   )
 }
 
+function ConsentGate({ info, accepting, onAccept }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-white border border-gray-100 rounded-2xl shadow-sm p-6 animate-scale-up">
+        <div className="w-12 h-12 rounded-xl bg-primary-50 flex items-center justify-center mb-4">
+          <FiShield className="text-primary-600" size={22} />
+        </div>
+        <h2 className="text-lg font-bold text-gray-900">{info?.title || 'Before we begin'}</h2>
+        <p className="text-sm text-gray-600 leading-relaxed mt-3 whitespace-pre-wrap">{info?.text}</p>
+        <button
+          onClick={onAccept}
+          disabled={accepting}
+          className="btn-primary w-full mt-5 disabled:opacity-50"
+        >
+          {accepting ? 'One moment…' : 'I understand and agree'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function BookingSuccessCard({ data, onViewAppointments }) {
   return (
     <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-emerald-50 to-teal-50 animate-slide-up">
@@ -176,12 +197,31 @@ export default function Chat() {
   const [bookingResult, setBookingResult] = useState(null)
   const [stage, setStage] = useState(null)
   const [latestGuidance, setLatestGuidance] = useState(null)
+  const [consent, setConsent] = useState(null)
+  const [accepting, setAccepting] = useState(false)
   const endRef = useRef(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  // Triage is gated on accepting the current medical disclaimer.
+  useEffect(() => {
+    getConsent().then((r) => setConsent(r.data)).catch(() => setConsent({ accepted: true }))
+  }, [])
+
+  const handleAccept = async () => {
+    setAccepting(true)
+    try {
+      await acceptConsent()
+      setConsent((c) => ({ ...c, accepted: true }))
+    } catch {
+      toast.error('Could not record your consent. Please try again.')
+    } finally {
+      setAccepting(false)
+    }
+  }
 
   const handleSend = async () => {
     const text = input.trim()
@@ -192,13 +232,12 @@ export default function Chat() {
     setLoading(true)
 
     try {
-      const res = await sendMessage({
+      const data = await sendMessage({
         message: text,
         conversation_history: conversationHistory,
         collected_fields: collectedFields,
       })
 
-      const data = res.data
       const newHistory = [
         ...conversationHistory,
         { role: 'user', content: text },
@@ -235,7 +274,14 @@ export default function Chat() {
         toast.success('Your appointment has been successfully booked!', 'Booked!')
       }
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Sorry, I encountered an error. Please try again.'
+      // Server enforces the consent gate too — surface it instead of an error.
+      const detail = err.response?.data?.detail
+      if (err.response?.status === 403 && detail?.code === 'consent_required') {
+        try { const r = await getConsent(); setConsent(r.data) }
+        catch { setConsent({ accepted: false, title: 'Before we begin', text: '' }) }
+        return
+      }
+      const msg = (typeof detail === 'string' ? detail : null) || err.message || 'Sorry, I encountered an error. Please try again.'
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: msg, error: true },
@@ -256,10 +302,14 @@ export default function Chat() {
       <div className="px-5 py-4 border-b border-gray-100 bg-white/80 backdrop-blur-sm">
         <h1 className="text-lg font-bold text-gray-900">AI Appointment Booking</h1>
         <p className="text-sm text-gray-400 mt-0.5">
-          Describe your symptoms — our AI assesses severity and books the right doctor.
+          Describe your symptoms - our AI assesses severity and books the right doctor.
         </p>
       </div>
 
+      {consent && consent.accepted === false ? (
+        <ConsentGate info={consent} accepting={accepting} onAccept={handleAccept} />
+      ) : (
+      <>
       {/* Messages */}
       <div
         role="log"
@@ -319,12 +369,31 @@ export default function Chat() {
       </div>
 
       {/* Context banners */}
-      {stage === 'emergency' && <EmergencyBanner analysis={messages[messages.length - 1]?.content} />}
       {stage === 'no_slots' && <NoSlotsBanner />}
 
-      {/* Input or success card */}
+      {/* Input, success card, or emergency action */}
       {bookingResult ? (
         <BookingSuccessCard data={bookingResult} onViewAppointments={() => navigate('/appointments')} />
+      ) : stage === 'emergency' ? (
+        <div className="mx-4 mb-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col gap-3 animate-scale-up">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+              <FiAlertOctagon className="text-red-600" size={20} />
+            </div>
+            <div>
+              <p className="font-bold text-red-800 text-sm">Emergency Detected - Call 911 Now</p>
+              <p className="text-red-600 text-xs mt-1 leading-relaxed">
+                Please seek immediate emergency medical care. Chat is disabled due to the critical nature of your symptoms.
+              </p>
+            </div>
+          </div>
+          <a
+            href="tel:911"
+            className="w-full bg-red-600 text-white font-bold text-sm py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-red-700 transition-colors shadow-md hover:shadow-lg active:scale-[0.98] duration-150"
+          >
+            <FiPhone size={14} /> Call Emergency Services
+          </a>
+        </div>
       ) : (
         <div className="px-4 py-3 bg-white/80 backdrop-blur-sm border-t border-gray-100">
           <div className="flex items-end gap-2">
@@ -368,6 +437,8 @@ export default function Chat() {
           )}
           <p className="text-xs text-gray-400 mt-1.5">Press Enter to send · Shift+Enter for new line</p>
         </div>
+      )}
+      </>
       )}
     </div>
   )

@@ -1,17 +1,13 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 
-from models.patient import Patient
-from web.auth.security import get_current_patient
+from web.auth.security import get_current_admin
 
 
-def require_admin(current_patient: Patient = Depends(get_current_patient)) -> Patient:
+def require_admin(admin=Depends(get_current_admin)):
+    """FastAPI dependency that ensures the caller is a platform operator.
+
+    A platform admin is now a first-class identity (PlatformAdmin) authenticated
+    via an `admin`-role token - not a patient account with an is_admin flag.
+    Returns the PlatformAdmin; get_current_admin raises 401 for non-admin tokens.
     """
-    FastAPI dependency that ensures the current user is an admin.
-    Raises HTTP 403 if the patient does not have is_admin=True.
-    """
-    if not current_patient.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
-    return current_patient
+    return admin

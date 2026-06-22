@@ -95,7 +95,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      {/* Toast stack — fixed bottom-right */}
+      {/* Toast stack - fixed bottom-right */}
       <div
         aria-live="polite"
         aria-label="Notifications"

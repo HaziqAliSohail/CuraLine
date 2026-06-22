@@ -15,7 +15,7 @@ const WEEKDAYS = [
 ]
 
 function fmtTime(t) {
-  return t ? new Date(`1970-01-01T${t}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '—'
+  return t ? new Date(`1970-01-01T${t}`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : '-'
 }
 
 function toISODate(d) {
@@ -229,7 +229,7 @@ export default function DoctorSchedule() {
     setActing((p) => ({ ...p, [id]: true }))
     try {
       await closeDoctorSlot(id)
-      toast.info('Slot closed — patients can no longer book it.')
+      toast.info('Slot closed - patients can no longer book it.')
       fetchSlots()
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Could not close the slot.')
@@ -261,7 +261,7 @@ export default function DoctorSchedule() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       <div className="mb-6 animate-slide-up">
         <h1 className="text-2xl font-bold text-gray-900">My Schedule</h1>
-        <p className="text-gray-400 text-sm mt-1">Define when patients can book you — in bulk or one slot at a time.</p>
+        <p className="text-gray-400 text-sm mt-1">Define when patients can book you - in bulk or one slot at a time.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6">

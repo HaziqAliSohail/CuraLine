@@ -62,7 +62,7 @@ class TestAppointmentsEndpoints:
         assert resp.json()["status"] == "CANCELLED"
 
     def test_patient_cannot_mark_completed(self, client, auth_header, sample_appointment):
-        """Visit outcomes belong to the doctor portal — patients may only cancel."""
+        """Visit outcomes belong to the doctor portal - patients may only cancel."""
         resp = client.put(
             f"/v1/appointments/{sample_appointment.id}/status",
             headers=auth_header,

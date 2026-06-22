@@ -81,7 +81,7 @@ class TestDoctorAnalytics:
         assert body["no_show"] == 1
         assert body["cancelled"] == 1
         assert body["no_show_rate"] == 25.0
-        assert body["avg_severity"] == 2.5  # (5+3+1+1)/4 — cancelled excluded
+        assert body["avg_severity"] == 2.5  # (5+3+1+1)/4 - cancelled excluded
         assert body["severity_counts"]["5"] == 1 or body["severity_counts"][5] == 1
         assert body["busiest_weekday"] == yesterday.strftime("%A")
 

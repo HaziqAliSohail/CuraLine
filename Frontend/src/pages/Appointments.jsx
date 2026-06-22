@@ -1,14 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
-import { listAppointments, cancelAppointment, createReview, listMyReviews } from '../api/client'
+import { listAppointments, cancelAppointment, createReview, listMyReviews, getAppointmentVideo, createCopayCheckout } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import SeverityBadge from '../components/SeverityBadge'
 import StatusBadge from '../components/StatusBadge'
-import { FiCalendar, FiClock, FiUser, FiTrash2, FiX, FiAlertTriangle, FiStar } from 'react-icons/fi'
+import { FiCalendar, FiClock, FiUser, FiTrash2, FiX, FiAlertTriangle, FiStar, FiVideo, FiCreditCard } from 'react-icons/fi'
 
 function parseLocalDate(dateStr) {
   if (!dateStr) return null
   const [year, month, date] = dateStr.split('-').map(Number)
   return new Date(year, month - 1, date)
+}
+
+function isApptPast(appt, now) {
+  if (!appt.slot_date) return true
+  const apptDate = parseLocalDate(appt.slot_date)
+  if (!apptDate) return true
+  if (appt.slot_time) {
+    const [hours, minutes] = appt.slot_time.split(':').map(Number)
+    apptDate.setHours(hours, minutes, 0, 0)
+  } else {
+    apptDate.setHours(23, 59, 59, 999)
+  }
+  return apptDate < now
 }
 
 const FILTERS = ['All', 'SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']
@@ -64,7 +77,7 @@ function CancelModal({ appointment, onConfirm, onCancel, loading }) {
           <span className="font-semibold">
             {appointment?.slot_date
               ? parseLocalDate(appointment.slot_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-              : '—'}
+              : '-'}
           </span>?
           This will free up the slot for other patients.
         </p>
@@ -185,28 +198,33 @@ function ReviewModal({ appointment, onClose, onSubmitted }) {
           {submitting ? 'Publishing…' : 'Publish Review'}
         </button>
         <p className="text-[11px] text-gray-400 text-center mt-2">
-          Posted as a verified review — only patients who attended can rate.
+          Posted as a verified review - only patients who attended can rate.
         </p>
       </div>
     </div>
   )
 }
 
-function AppointmentCard({ appointment, onCancel, myReview, onReview }) {
+function AppointmentCard({ appointment, onCancel, myReview, onReview, onClick, onJoinVideo, onPayCopay }) {
+  const isPast = isApptPast(appointment, new Date())
+
   const slotDate = appointment.slot_date
     ? parseLocalDate(appointment.slot_date).toLocaleDateString('en-US', {
         weekday: 'short', month: 'short', day: 'numeric',
       })
-    : '—'
+    : '-'
 
   const slotTime = appointment.slot_time
     ? new Date(`1970-01-01T${appointment.slot_time}`).toLocaleTimeString('en-US', {
         hour: 'numeric', minute: '2-digit',
       })
-    : '—'
+    : '-'
 
   return (
-    <div className="card flex items-start gap-4 animate-fade-in">
+    <div
+      onClick={onClick}
+      className="card flex items-start gap-4 animate-fade-in cursor-pointer hover:border-primary-200 transition-colors"
+    >
       <div className="w-12 h-12 bg-primary-50 rounded-xl flex items-center justify-center flex-shrink-0">
         <FiUser className="text-primary-500" size={20} />
       </div>
@@ -218,7 +236,7 @@ function AppointmentCard({ appointment, onCancel, myReview, onReview }) {
               <p className="text-xs text-primary-600 font-medium">{appointment.doctor_specialization}</p>
             )}
           </div>
-          <StatusBadge status={appointment.status} />
+          <StatusBadge status={appointment.status === 'SCHEDULED' && isPast ? 'Passed' : appointment.status} />
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
@@ -232,15 +250,42 @@ function AppointmentCard({ appointment, onCancel, myReview, onReview }) {
 
         <div className="flex items-center justify-between mt-3">
           <SeverityBadge score={appointment.severity_score} />
-          {appointment.status === 'SCHEDULED' && (
-            <button
-              onClick={() => onCancel(appointment)}
-              className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
-              aria-label={`Cancel appointment with ${appointment.doctor_name}`}
-            >
-              <FiTrash2 size={12} />
-              Cancel
-            </button>
+          {appointment.status === 'SCHEDULED' && !isPast && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onJoinVideo(appointment)
+                }}
+                className="flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 font-medium transition-colors"
+                aria-label={`Join video visit with ${appointment.doctor_name}`}
+              >
+                <FiVideo size={12} />
+                Join video
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onPayCopay(appointment)
+                }}
+                className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                aria-label={`Pay copay for appointment with ${appointment.doctor_name}`}
+              >
+                <FiCreditCard size={12} />
+                Pay copay
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onCancel(appointment)
+                }}
+                className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+                aria-label={`Cancel appointment with ${appointment.doctor_name}`}
+              >
+                <FiTrash2 size={12} />
+                Cancel
+              </button>
+            </div>
           )}
           {appointment.status === 'COMPLETED' && (
             myReview ? (
@@ -250,13 +295,151 @@ function AppointmentCard({ appointment, onCancel, myReview, onReview }) {
               </span>
             ) : (
               <button
-                onClick={() => onReview(appointment)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onReview(appointment)
+                }}
                 className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
                 aria-label={`Rate your visit with ${appointment.doctor_name}`}
               >
                 <FiStar size={12} /> Rate your visit
               </button>
             )
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AppointmentDetailModal({ appointment, onClose, onCancel, onReview, myReview }) {
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const slotDate = appointment.slot_date
+    ? parseLocalDate(appointment.slot_date).toLocaleDateString('en-US', {
+        weekday: 'long', month: 'long', day: 'numeric',
+      })
+    : '-'
+
+  const slotTime = appointment.slot_time
+    ? new Date(`1970-01-01T${appointment.slot_time}`).toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit',
+      })
+    : '-'
+
+  const isPast = isApptPast(appointment, new Date())
+  const displayStatus = appointment.status === 'SCHEDULED' && isPast ? 'Passed' : appointment.status
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="detail-dialog-title"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-up relative">
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 w-8 h-8 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+          aria-label="Close details"
+        >
+          <FiX size={18} />
+        </button>
+
+        <div className="flex items-center gap-3.5 mb-5">
+          <div className="w-12 h-12 bg-primary-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+            <FiUser className="text-primary-500" size={24} />
+          </div>
+          <div>
+            <h2 id="detail-dialog-title" className="font-bold text-gray-900 text-lg leading-tight">
+              {appointment.doctor_name || 'Your Doctor'}
+            </h2>
+            <p className="text-primary-600 text-sm font-medium">{appointment.doctor_specialization || 'General Practitioner'}</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Status</p>
+              <StatusBadge status={displayStatus} />
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Triage Severity</p>
+              <SeverityBadge score={appointment.severity_score} />
+            </div>
+          </div>
+
+          <div className="border-b border-gray-100 pb-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Schedule</p>
+            <div className="flex flex-col gap-1 text-sm text-gray-700">
+              <span className="flex items-center gap-2">
+                <FiCalendar className="text-gray-400" size={14} /> {slotDate}
+              </span>
+              <span className="flex items-center gap-2 mt-1">
+                <FiClock className="text-gray-400" size={14} /> {slotTime}
+              </span>
+            </div>
+          </div>
+
+          <div className="border-b border-gray-100 pb-3">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Symptom Notes</p>
+            <p className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 leading-relaxed mt-1">
+              {appointment.reason || 'No specific symptoms noted.'}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Patient Guide</p>
+            <p className="text-xs text-gray-500 leading-relaxed mt-1">
+              {appointment.status === 'SCHEDULED' && !isPast && (
+                "Please arrive 15 minutes before your scheduled appointment time. Bring a valid photo ID and your insurance card."
+              )}
+              {appointment.status === 'SCHEDULED' && isPast && (
+                "This appointment slot has passed. If you attended the visit, the doctor will update the records shortly."
+              )}
+              {appointment.status === 'COMPLETED' && (
+                "This appointment has been successfully completed. We hope you got the care you needed!"
+              )}
+              {appointment.status === 'CANCELLED' && (
+                "This appointment was cancelled. You can book a new slot using our Book with AI assistant."
+              )}
+              {appointment.status === 'NO_SHOW' && (
+                "A no-show outcome was recorded. Please schedule a new slot if you still need clinical consultation."
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6 border-t border-gray-100 pt-4">
+          <button onClick={onClose} className="btn-secondary flex-1 text-sm py-2">
+            Close
+          </button>
+          {appointment.status === 'SCHEDULED' && !isPast && (
+            <button
+              onClick={() => {
+                onClose()
+                onCancel(appointment)
+              }}
+              className="btn-danger flex-1 text-sm py-2"
+            >
+              Cancel
+            </button>
+          )}
+          {appointment.status === 'COMPLETED' && !myReview && (
+            <button
+              onClick={() => {
+                onClose()
+                onReview(appointment)
+              }}
+              className="btn-primary flex-1 text-sm py-2"
+            >
+              Rate Visit
+            </button>
           )}
         </div>
       </div>
@@ -273,6 +456,8 @@ export default function Appointments() {
   const [cancelling, setCancelling] = useState(false)
   const [reviewTarget, setReviewTarget] = useState(null)
   const [myReviews, setMyReviews] = useState({})
+  const [detailTarget, setDetailTarget] = useState(null)
+  const [visibleCount, setVisibleCount] = useState(10)
 
   const fetchAppointments = async () => {
     try {
@@ -303,9 +488,63 @@ export default function Appointments() {
     }
   }
 
+  const handleJoinVideo = async (appt) => {
+    try {
+      const { data } = await getAppointmentVideo(appt.id)
+      if (data.enabled && data.url) {
+        window.open(data.url, '_blank', 'noopener')
+      } else {
+        const notify = toast.info || toast.success || toast.error
+        notify(data.message || "Video visits aren't enabled yet.")
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not start the video visit.')
+    }
+  }
+
+  const handlePayCopay = async (appt) => {
+    try {
+      const { data } = await createCopayCheckout(appt.id)
+      if (data.enabled && data.url) {
+        window.location.href = data.url  // Stripe-hosted checkout
+      } else {
+        const notify = toast.info || toast.success || toast.error
+        notify(data.message || "Payments aren't enabled yet.")
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not start checkout.')
+    }
+  }
+
+  const now = new Date()
+  const sorted = [...appointments].sort((a, b) => {
+    const aPast = isApptPast(a, now)
+    const bPast = isApptPast(b, now)
+
+    if (aPast !== bPast) {
+      return aPast ? 1 : -1
+    }
+
+    const aTime = a.slot_date ? new Date(`${a.slot_date}T${a.slot_time || '00:00:00'}`) : new Date(0)
+    const bTime = b.slot_date ? new Date(`${b.slot_date}T${b.slot_time || '00:00:00'}`) : new Date(0)
+
+    if (aPast) {
+      return bTime - aTime // Past: most recent first
+    } else {
+      return aTime - bTime // Upcoming: soonest first
+    }
+  })
+
   const filtered = filter === 'All'
-    ? appointments
-    : appointments.filter((a) => a.status === filter)
+    ? sorted
+    : sorted.filter((a) => a.status === filter)
+
+  const paginated = filtered.slice(0, visibleCount)
+
+  const handleFilterChange = (f) => {
+    setFilter(f)
+    setVisibleCount(10)
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -319,7 +558,7 @@ export default function Appointments() {
         {FILTERS.map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => handleFilterChange(f)}
             className={`px-3.5 py-1.5 rounded-xl text-sm font-medium transition-all duration-150 ${
               filter === f
                 ? 'bg-primary-600 text-white shadow-md shadow-primary-500/20'
@@ -347,15 +586,32 @@ export default function Appointments() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((appt) => (
+          {paginated.map((appt) => (
             <AppointmentCard
               key={appt.id}
               appointment={appt}
               onCancel={setCancelTarget}
               myReview={myReviews[appt.id]}
               onReview={setReviewTarget}
+              onJoinVideo={handleJoinVideo}
+              onPayCopay={handlePayCopay}
+              onClick={() => setDetailTarget(appt)}
             />
           ))}
+          
+          {filtered.length > visibleCount && (
+            <div className="flex flex-col items-center gap-2 mt-6 animate-fade-in">
+              <span className="text-xs text-gray-400">
+                Showing {visibleCount} of {filtered.length} appointments
+              </span>
+              <button
+                onClick={() => setVisibleCount((prev) => prev + 10)}
+                className="btn-secondary text-sm px-6 py-2"
+              >
+                Load More
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -378,6 +634,17 @@ export default function Appointments() {
             setReviewTarget(null)
             fetchAppointments()
           }}
+        />
+      )}
+
+      {/* Detail modal */}
+      {detailTarget && (
+        <AppointmentDetailModal
+          appointment={detailTarget}
+          onClose={() => setDetailTarget(null)}
+          onCancel={setCancelTarget}
+          onReview={setReviewTarget}
+          myReview={myReviews[detailTarget.id]}
         />
       )}
     </div>

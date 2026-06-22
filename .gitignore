@@ -13,7 +13,7 @@ build/
 .ruff_cache/
 uvicorn_out.txt
 
-# Secrets & local data — never commit
+# Secrets & local data - never commit
 .env
 *.db
 
@@ -21,6 +21,19 @@ uvicorn_out.txt
 node_modules/
 Frontend/dist/
 npm-debug.log*
+# Playwright e2e artifacts
+Frontend/playwright-report/
+Frontend/test-results/
+Frontend/.last-run.json
+
+# Mobile (Expo)
+Mobile/.expo/
+Mobile/dist/
+# Store-submission service-account key (written from a CI secret; never commit)
+Mobile/google-service-account.json
+# Throwaway venv used by Mobile/gen_icons.py
+Mobile/.iconvenv/
+venv311/
 
 # IDE / tooling
 .idea/

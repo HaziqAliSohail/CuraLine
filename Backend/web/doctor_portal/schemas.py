@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class DoctorAppointmentOutSchema(BaseModel):
-    """An appointment as seen by the treating doctor — includes the patient's
+    """An appointment as seen by the treating doctor - includes the patient's
     triage intelligence collected by the AI intake."""
     id: int
     status: str
@@ -17,6 +17,9 @@ class DoctorAppointmentOutSchema(BaseModel):
     patient_gender: str | None = None
     patient_phone: str | None = None
     patient_medical_history: str | None = None
+    clinical_summary: str | None = None
+    no_show_probability: float | None = None
+    no_show_risk_reason: str | None = None
 
     model_config = {"from_attributes": True}
 

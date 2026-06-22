@@ -14,23 +14,28 @@ import {
   FiSettings,
   FiTrendingUp,
   FiChevronDown,
+  FiShield,
 } from 'react-icons/fi'
 
 const patientNavItems = [
-  { to: '/',             label: 'Home',             icon: FiHome },
-  { to: '/chat',         label: 'Book with AI',     icon: FiMessageSquare },
-  { to: '/appointments', label: 'My Appointments',  icon: FiCalendar },
-  { to: '/reschedule',   label: 'Reschedule',       icon: FiRefreshCw, badge: true },
-  { to: '/doctors',      label: 'Doctors',          icon: FiUsers },
+  { to: '/', label: 'Home', icon: FiHome },
+  { to: '/chat', label: 'Book with AI', icon: FiMessageSquare },
+  { to: '/appointments', label: 'My Appointments', icon: FiCalendar },
+  { to: '/reschedule', label: 'Reschedule', icon: FiRefreshCw, badge: true },
+  { to: '/doctors', label: 'Doctors', icon: FiUsers },
 ]
 
 const doctorNavItems = [
-  { to: '/doctor',          label: 'My Day',      icon: FiHome },
+  { to: '/doctor', label: 'My Day', icon: FiHome },
   { to: '/doctor/schedule', label: 'My Schedule', icon: FiCalendar },
-  { to: '/doctor/insights', label: 'Insights',    icon: FiTrendingUp },
+  { to: '/doctor/insights', label: 'Insights', icon: FiTrendingUp },
 ]
 
-const adminNavItem = { to: '/admin/applications', label: 'Applications', icon: FiUserCheck }
+const adminNavItems = [
+  { to: '/admin/applications', label: 'Applications', icon: FiUserCheck },
+  { to: '/admin/hospitals', label: 'Hospitals', icon: FiHome },
+  { to: '/admin/audit-logs', label: 'Audit Log', icon: FiShield },
+]
 
 function HeartPulseIcon({ className }) {
   return (
@@ -48,15 +53,18 @@ export default function Navbar() {
   const [profileOpen, setProfileOpen] = useState(false)
 
   const isDoctor = role === 'doctor'
+  const isAdmin = role === 'admin'
   const navItems = isDoctor
-    ? doctorNavItems
-    : user?.is_admin
-    ? [...patientNavItems, adminNavItem]
-    : patientNavItems
+    ? (user?.is_hospital_admin
+        ? [...doctorNavItems, { to: '/doctor/applications', label: 'Applications', icon: FiUserCheck }]
+        : doctorNavItems)
+    : isAdmin
+      ? adminNavItems
+      : patientNavItems
 
   // Poll for pending reschedule requests every 30s (patient accounts only)
   useEffect(() => {
-    if (!user || isDoctor) return
+    if (!user || isDoctor || isAdmin) return
     const fetchPending = async () => {
       try {
         const res = await listRescheduleRequests()
@@ -68,7 +76,7 @@ export default function Navbar() {
     fetchPending()
     const interval = setInterval(fetchPending, 30000)
     return () => clearInterval(interval)
-  }, [user, isDoctor])
+  }, [user, isDoctor, isAdmin])
 
   if (!user) return null
 
@@ -82,12 +90,10 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
 
-          {/* Logo */}
-          <Link to={isDoctor ? '/doctor' : '/'} className="flex items-center gap-2.5 group" aria-label="CuraLine Home">
-            <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center shadow-md shadow-primary-500/30 group-hover:shadow-primary-500/50 transition-shadow">
-              <HeartPulseIcon className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-bold text-lg text-gray-900 tracking-tight">CuraLine</span>
+          {/* Logo — h-16 fills the 64px bar; w-auto keeps the real aspect ratio
+              (no square letterboxing). Navbar height (h-16) is unchanged. */}
+          <Link to={isDoctor ? '/doctor' : isAdmin ? '/admin/hospitals' : '/'} className="flex items-center group" aria-label="CuraLine Home">
+            <img src="/logo.png" alt="CuraLine Logo" className="h-16 w-auto object-contain object-left" />
           </Link>
 
           {/* Desktop nav */}
@@ -98,11 +104,10 @@ export default function Navbar() {
                 <Link
                   key={to}
                   to={to}
-                  className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${
-                    active
+                  className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-150 ${active
                       ? 'bg-primary-50 text-primary-700'
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                    }`}
                 >
                   <Icon size={15} />
                   {label}
@@ -136,7 +141,7 @@ export default function Navbar() {
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
                 <div className="absolute right-0 top-12 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-1.5 z-20 animate-scale-up">
-                  {!isDoctor ? (
+                  {role === 'patient' && (
                     <>
                       <Link
                         to="/profile"
@@ -148,7 +153,8 @@ export default function Navbar() {
                       </Link>
                       <hr className="my-1 border-gray-100" />
                     </>
-                  ) : (
+                  )}
+                  {isDoctor && (
                     <>
                       <Link
                         to="/doctor/settings"
@@ -158,6 +164,16 @@ export default function Navbar() {
                         <FiSettings size={15} className="text-gray-400" />
                         Settings
                       </Link>
+                      <hr className="my-1 border-gray-100" />
+                    </>
+                  )}
+                  {isAdmin && (
+                    <>
+                      <div className="px-4 py-2 text-xs text-gray-400">
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-primary-600">
+                          <FiShield size={12} /> Platform operator
+                        </span>
+                      </div>
                       <hr className="my-1 border-gray-100" />
                     </>
                   )}
@@ -173,30 +189,29 @@ export default function Navbar() {
             )}
           </div>
         </div>
-
-        {/* Mobile nav */}
-        <nav aria-label="Mobile navigation" className="flex md:hidden gap-0.5 pb-2 overflow-x-auto">
+        {/* Mobile Bottom Navigation Bar */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 px-4 py-2 flex items-center justify-around z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.03)] pb-safe">
           {navItems.map(({ to, label, icon: Icon, badge }) => {
             const active = location.pathname === to
             return (
               <Link
                 key={to}
                 to={to}
-                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors flex-shrink-0 ${
-                  active ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-gray-50'
+                className={`relative flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[10px] font-bold transition-all duration-150 ${
+                  active ? 'text-primary-600' : 'text-gray-500 hover:text-gray-900'
                 }`}
               >
-                <Icon size={13} />
-                {label}
+                <Icon size={18} className={active ? 'text-primary-600' : 'text-gray-400'} />
+                <span>{label.replace('Book with AI', 'AI Chat').replace('My Appointments', 'Bookings')}</span>
                 {badge && pendingCount > 0 && (
-                  <span className="ml-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {pendingCount}
+                  <span className="absolute top-0.5 right-2 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {pendingCount > 9 ? '9+' : pendingCount}
                   </span>
                 )}
               </Link>
             )
           })}
-        </nav>
+        </div>
       </div>
     </nav>
   )

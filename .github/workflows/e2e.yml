@@ -1,0 +1,96 @@
+name: E2E
+
+# End-to-end booking-path tests against a live stack. Heavy, so it runs on
+# pushes to main and on demand (not every PR).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: curaline
+          POSTGRES_PASSWORD: curaline
+          POSTGRES_DB: appointment_management
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U curaline"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: curaline
+      POSTGRES_PASSWORD: curaline
+      POSTGRES_NAME: appointment_management
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      SECRET_KEY: e2e-secret-key-long-enough-for-startup-validation-ok
+      ENABLE_DOCS: "False"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Backend: install, migrate, seed, serve ──
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: Backend/requirements.txt
+      - name: Install backend deps
+        working-directory: Backend
+        run: pip install -r requirements.txt
+      - name: Migrate + seed
+        working-directory: Backend
+        run: |
+          alembic upgrade head
+          python seed.py
+      - name: Start backend (uvicorn :8080)
+        working-directory: Backend
+        run: nohup uvicorn main:app --host 0.0.0.0 --port 8080 > backend.log 2>&1 &
+
+      # ── Frontend: install, browser, dev server (proxies /v1 -> :8080) ──
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+      - name: Install frontend deps
+        working-directory: Frontend
+        run: npm ci
+      - name: Install Playwright chromium
+        working-directory: Frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start frontend (vite dev :3001)
+        working-directory: Frontend
+        run: nohup npm run dev -- --host --port 3001 > frontend.log 2>&1 &
+
+      - name: Wait for stack
+        run: npx --yes wait-on http://localhost:8080/health http://localhost:3001 --timeout 120000
+
+      - name: Run E2E
+        working-directory: Frontend
+        run: npm run e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: Frontend/playwright-report
+          retention-days: 7

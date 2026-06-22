@@ -25,6 +25,9 @@ vi.mock('../context/ToastContext', () => ({
 // Mock API client
 vi.mock('../api/client', () => ({
   sendMessage: vi.fn(),
+  // Consent gate: resolve as already-accepted so the chat UI renders.
+  getConsent: vi.fn(() => Promise.resolve({ data: { accepted: true } })),
+  acceptConsent: vi.fn(() => Promise.resolve()),
 }))
 
 describe('Chat Page', () => {
@@ -50,14 +53,12 @@ describe('Chat Page', () => {
 
   it('sends user message and displays AI reply with severity score', async () => {
     apiClient.sendMessage.mockResolvedValue({
-      data: {
         message: 'Understood. Booking an appointment for you.',
         is_appointment_booked: true,
         appointment_id: 12,
         severity_score: 4,
         stage: 'complete',
         collected_fields: { chief_complaint: 'sore throat' },
-      },
     })
 
     render(
@@ -79,7 +80,7 @@ describe('Chat Page', () => {
     await waitFor(() => {
       expect(screen.getByText('Understood. Booking an appointment for you.')).toBeInTheDocument()
       // Severity badge is shown
-      expect(screen.getByText(/4\/5 — High/i)).toBeInTheDocument()
+      expect(screen.getByText(/4\/5 - High/i)).toBeInTheDocument()
       // Toast notification is triggered
       expect(mockToast.success).toHaveBeenCalledWith(
         'Your appointment has been successfully booked!',
@@ -90,13 +91,11 @@ describe('Chat Page', () => {
 
   it('shows emergency banner when AI flags emergency stage', async () => {
     apiClient.sendMessage.mockResolvedValue({
-      data: {
         message: 'This sounds like an emergency. Please go to the nearest ER.',
         is_appointment_booked: false,
         severity_score: 5,
         stage: 'emergency',
         collected_fields: {},
-      },
     })
 
     render(
@@ -112,20 +111,18 @@ describe('Chat Page', () => {
     fireEvent.click(sendBtn)
 
     await waitFor(() => {
-      expect(screen.getByText(/Emergency Detected — Call 911 Now/i)).toBeInTheDocument()
+      expect(screen.getByText(/Emergency Detected - Call 911 Now/i)).toBeInTheDocument()
       expect(screen.getByRole('link', { name: /Call Emergency Services/i })).toBeInTheDocument()
     })
   })
 
   it('shows no slots banner when AI stage is no_slots', async () => {
     apiClient.sendMessage.mockResolvedValue({
-      data: {
         message: 'No slots available.',
         is_appointment_booked: false,
         severity_score: 3,
         stage: 'no_slots',
         collected_fields: {},
-      },
     })
 
     render(
@@ -147,7 +144,6 @@ describe('Chat Page', () => {
 
   it('renders inline urgent guidance banner when API returns guidance data', async () => {
     apiClient.sendMessage.mockResolvedValue({
-      data: {
         message: 'I have matched your symptoms.',
         is_appointment_booked: false,
         severity_score: 2,
@@ -155,7 +151,6 @@ describe('Chat Page', () => {
         collected_fields: {},
         urgent_guidance: 'Take rest and stay hydrated.\n\nThis is general guidance.',
         guidance_type: 'TELEHEALTH',
-      },
     })
 
     render(
